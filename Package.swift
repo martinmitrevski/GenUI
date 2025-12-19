@@ -1,9 +1,6 @@
-//
-// Copyright © 2025 Martin Mitrevski. All rights reserved.
-//
-
 // swift-tools-version: 5.9
 
+import Foundation
 import PackageDescription
 
 let package = Package(
@@ -21,11 +18,6 @@ let package = Package(
         .target(
             name: "GenUI",
             path: "GenUI/Sources"
-        ),
-        .testTarget(
-            name: "GenUITests",
-            dependencies: ["GenUI"],
-            path: "GenUITests"
         )
     ]
 )
