@@ -1,0 +1,83 @@
+//
+// Copyright © 2025 Martin Mitrevski. All rights reserved.
+//
+
+import SwiftUI
+
+private struct RowData {
+    let children: Any?
+    let distribution: String?
+    let alignment: String?
+
+    init(json: JsonMap) {
+        self.children = json["children"]
+        self.distribution = json["distribution"] as? String
+        self.alignment = json["alignment"] as? String
+    }
+}
+
+private func parseRowAlignment(_ alignment: String?) -> VerticalAlignment {
+    switch alignment {
+    case "center": return .center
+    case "end": return .bottom
+    default: return .top
+    }
+}
+
+public let row = CatalogItem(
+    name: "Row",
+    dataSchema: S.object(
+        properties: [
+            "distribution": S.string(
+                description: "How children are aligned on the main axis. ",
+                enumValues: ["start", "center", "end", "spaceBetween", "spaceAround", "spaceEvenly"]
+            ),
+            "alignment": S.string(
+                description: "How children are aligned on the cross axis. ",
+                enumValues: ["start", "center", "end", "stretch", "baseline"]
+            ),
+            "children": A2uiSchemas.componentArrayReference(
+                description: "Either an explicit list of widget IDs for the children, or a template with a data binding to the list of children."
+            )
+        ]
+    ),
+    widgetBuilder: { itemContext in
+        let data = RowData(json: itemContext.data as? JsonMap ?? [:])
+
+        return AnyView(ComponentChildrenBuilder(
+            childrenData: data.children,
+            dataContext: itemContext.dataContext,
+            buildChild: itemContext.buildChild,
+            getComponent: itemContext.getComponent,
+            explicitListBuilder: { childIds, buildChild, getComponent, dataContext in
+                AnyView(
+                    HStack(alignment: parseRowAlignment(data.alignment), spacing: 8) {
+                        ForEach(childIds, id: \.self) { componentId in
+                            buildWeightedChild(
+                                componentId: componentId,
+                                dataContext: dataContext,
+                                buildChild: buildChild,
+                                weight: getComponent(componentId)?.weight
+                            )
+                        }
+                    }
+                )
+            },
+            templateListWidgetBuilder: { list, componentId, dataBinding in
+                let items = list.values.map { $0 }
+                return AnyView(
+                    HStack(alignment: parseRowAlignment(data.alignment), spacing: 8) {
+                        ForEach(Array(items.enumerated()), id: \.offset) { index, _ in
+                            buildWeightedChild(
+                                componentId: componentId,
+                                dataContext: itemContext.dataContext.nested(DataPath("\(dataBinding)/\(index)")),
+                                buildChild: itemContext.buildChild,
+                                weight: itemContext.getComponent(componentId)?.weight
+                            )
+                        }
+                    }
+                )
+            }
+        ))
+    }
+)
