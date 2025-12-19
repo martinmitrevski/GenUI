@@ -24,6 +24,10 @@ public struct AgentCard {
 /// Connects to an A2UI agent over A2A and streams responses.
 /// Translates A2A messages into `A2uiMessage` updates.
 public final class A2uiAgentConnector {
+    private let a2uiMimeTypes = [
+        "application/json+a2ui",
+        "application/json+a2aui"
+    ]
     public let url: URL
 
     private let controller = PassthroughSubject<A2uiMessage, Never>()
@@ -78,31 +82,38 @@ public final class A2uiAgentConnector {
         var message = A2AMessage()
         message.messageId = UUID().uuidString
         message.role = "user"
-        message.parts = parts.map { part in
-            switch part {
-            case let text as TextPart:
-                return A2ATextPart(text: text.text)
-            case let data as DataPart:
-                return A2ADataPart(data: data.data ?? [:])
-            case let image as ImagePart:
-                if let url = image.url {
-                    let file = A2AFileWithUri(uri: url.absoluteString, mimeType: image.mimeType)
+        if let interaction = chatMessage as? UserUiInteractionMessage,
+           let interactionData = parseJsonMap(interaction.text) {
+            message.parts = [
+                A2ADataPart(data: interactionData, metadata: ["mimeType": a2uiMimeTypes[0]])
+            ]
+        } else {
+            message.parts = parts.map { part in
+                switch part {
+                case let text as TextPart:
+                    return A2ATextPart(text: text.text)
+                case let data as DataPart:
+                    return A2ADataPart(data: data.data ?? [:])
+                case let image as ImagePart:
+                    if let url = image.url {
+                        let file = A2AFileWithUri(uri: url.absoluteString, mimeType: image.mimeType)
+                        return A2AFilePart(file: file)
+                    }
+                    let base64Data: String
+                    if let bytes = image.bytes {
+                        base64Data = bytes.base64EncodedString()
+                    } else if let base64 = image.base64 {
+                        base64Data = base64
+                    } else {
+                        genUiLogger.warning("ImagePart has no data (url, bytes, or base64)")
+                        return A2ATextPart(text: "[Empty Image]")
+                    }
+                    let file = A2AFileWithBytes(bytes: base64Data, mimeType: image.mimeType)
                     return A2AFilePart(file: file)
+                default:
+                    genUiLogger.warning("Unknown message part type: \(type(of: part))")
+                    return A2ATextPart(text: "[Unknown Part]")
                 }
-                let base64Data: String
-                if let bytes = image.bytes {
-                    base64Data = bytes.base64EncodedString()
-                } else if let base64 = image.base64 {
-                    base64Data = base64
-                } else {
-                    genUiLogger.warning("ImagePart has no data (url, bytes, or base64)")
-                    return A2ATextPart(text: "[Empty Image]")
-                }
-                let file = A2AFileWithBytes(bytes: base64Data, mimeType: image.mimeType)
-                return A2AFilePart(file: file)
-            default:
-                genUiLogger.warning("Unknown message part type: \(type(of: part))")
-                return A2ATextPart(text: "[Unknown Part]")
             }
         }
 
@@ -172,7 +183,7 @@ public final class A2uiAgentConnector {
                             genUiLogger.info("Received A2A Message:\n\(pretty)")
                         }
                         for part in message.parts {
-                            if let dataPart = part as? A2ADataPart {
+                            if let dataPart = part as? A2ADataPart, shouldProcessA2uiPart(dataPart) {
                                 processA2uiMessages(dataPart.data)
                             }
                         }
@@ -252,9 +263,17 @@ public final class A2uiAgentConnector {
             } catch {
                 errorController.send(error)
             }
-        } else {
-            genUiLogger.warning("A2A data part did not contain any known A2UI messages.")
+            return
         }
+        if let list = data["messages"] as? [Any] {
+            for item in list {
+                if let map = item as? JsonMap {
+                    processA2uiMessages(map)
+                }
+            }
+            return
+        }
+        genUiLogger.warning("A2A data part did not contain any known A2UI messages.")
     }
 
     private func prettyJson(_ json: JsonMap) -> String? {
@@ -263,5 +282,22 @@ public final class A2uiAgentConnector {
             return nil
         }
         return text
+    }
+
+    private func shouldProcessA2uiPart(_ part: A2ADataPart) -> Bool {
+        guard let metadata = part.metadata else { return true }
+        if let mimeType = metadata["mimeType"] as? String {
+            return a2uiMimeTypes.contains(mimeType)
+        }
+        if let mimeType = metadata["mime-type"] as? String {
+            return a2uiMimeTypes.contains(mimeType)
+        }
+        return true
+    }
+
+    private func parseJsonMap(_ text: String) -> JsonMap? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        guard let json = try? JSONSerialization.jsonObject(with: data) else { return nil }
+        return json as? JsonMap
     }
 }

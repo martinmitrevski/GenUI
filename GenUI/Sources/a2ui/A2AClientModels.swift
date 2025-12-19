@@ -164,13 +164,14 @@ public struct A2ATextPart: A2APart {
     /// Serializes the part to a JSON map.
     /// The output is suitable for transport or logging.
     public func toJson() -> JsonMap {
-        ["type": "text", "text": text]
+        ["kind": "text", "type": "text", "text": text]
     }
 
     /// Parses a text part from a JSON map.
     /// Returns nil if the payload is not a text part.
     public static func fromJson(_ json: JsonMap) -> A2ATextPart? {
-        guard json["type"] as? String == "text" else { return nil }
+        let kind = (json["type"] as? String) ?? (json["kind"] as? String)
+        guard kind == "text" else { return nil }
         return A2ATextPart(text: json["text"] as? String ?? "")
     }
 }
@@ -180,23 +181,40 @@ public struct A2ATextPart: A2APart {
 public struct A2ADataPart: A2APart {
     public var data: JsonMap
 
+    public var metadata: JsonMap?
+
     /// Creates a data part with an optional JSON payload.
-    /// Defaults to an empty map.
-    public init(data: JsonMap = [:]) {
+    /// Include metadata such as a mime type when needed.
+    public init(data: JsonMap = [:], metadata: JsonMap? = nil) {
         self.data = data
+        self.metadata = metadata
     }
 
     /// Serializes the part to a JSON map.
     /// The output is suitable for transport or logging.
     public func toJson() -> JsonMap {
-        ["type": "data", "data": data]
+        var json: JsonMap = ["kind": "data", "type": "data", "data": data]
+        if let metadata {
+            json["metadata"] = metadata
+            if let mimeType = metadata["mimeType"] as? String {
+                json["mimeType"] = mimeType
+            }
+        }
+        return json
     }
 
     /// Parses a data part from a JSON map.
     /// Returns nil if the payload is not a data part.
     public static func fromJson(_ json: JsonMap) -> A2ADataPart? {
-        guard json["type"] as? String == "data" else { return nil }
-        return A2ADataPart(data: json["data"] as? JsonMap ?? [:])
+        let kind = (json["type"] as? String) ?? (json["kind"] as? String)
+        guard kind == "data" else { return nil }
+        guard let data = json["data"] as? JsonMap else { return nil }
+        var metadata = json["metadata"] as? JsonMap
+        if let mimeType = json["mimeType"] as? String {
+            if metadata == nil { metadata = [:] }
+            metadata?["mimeType"] = mimeType
+        }
+        return A2ADataPart(data: data, metadata: metadata)
     }
 }
 
@@ -214,13 +232,14 @@ public struct A2AFilePart: A2APart {
     /// Serializes the part to a JSON map.
     /// The output is suitable for transport or logging.
     public func toJson() -> JsonMap {
-        ["type": "file", "file": file.toJson()]
+        ["kind": "file", "type": "file", "file": file.toJson()]
     }
 
     /// Parses a file part from a JSON map.
     /// Returns nil if the payload is not a file part.
     public static func fromJson(_ json: JsonMap) -> A2AFilePart? {
-        guard json["type"] as? String == "file" else { return nil }
+        let kind = (json["type"] as? String) ?? (json["kind"] as? String)
+        guard kind == "file" else { return nil }
         guard let fileJson = json["file"] as? JsonMap else { return nil }
         if let uri = fileJson["uri"] as? String {
             let mimeType = fileJson["mimeType"] as? String ?? ""
@@ -349,6 +368,7 @@ public struct A2AMessage: A2AResult {
         var json: JsonMap = [
             "messageId": messageId,
             "role": role,
+            "kind": "message",
             "parts": parts.map { $0.toJson() }
         ]
         if let referenceTaskIds {
@@ -657,8 +677,8 @@ public final class A2AClient: A2AClientProtocol {
 
                     var request = URLRequest(url: endpoint)
                     request.httpMethod = "POST"
-                    request.setValue("application/json", forHTTPHeaderField: "Accept")
-                    request.setValue("text/event-stream", forHTTPHeaderField: "Content-Type")
+                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
                     var headers = customHeaders
                     if let authHeaders = await authenticationHandler?.headers {
