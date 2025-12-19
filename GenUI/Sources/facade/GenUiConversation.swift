@@ -21,10 +21,11 @@ public final class GenUiConversation {
     private let conversationNotifier = ValueNotifier<[ChatMessage]>([])
 
     /// Creates a conversation facade with event callbacks.
-    /// Hooks generator output to the A2UI message processor.
+    /// Optionally disables auto-handling of submit events.
     public init(
         contentGenerator: ContentGenerator,
         a2uiMessageProcessor: A2uiMessageProcessor,
+        handleSubmitEvents: Bool = true,
         onSurfaceAdded: ((SurfaceAdded) -> Void)? = nil,
         onSurfaceUpdated: ((SurfaceUpdated) -> Void)? = nil,
         onSurfaceDeleted: ((SurfaceRemoved) -> Void)? = nil,
@@ -45,11 +46,13 @@ public final class GenUiConversation {
             }
             .store(in: &cancellables)
 
-        a2uiMessageProcessor.onSubmit
-            .sink { [weak self] message in
-                Task { await self?.sendRequest(message) }
-            }
-            .store(in: &cancellables)
+        if handleSubmitEvents {
+            a2uiMessageProcessor.onSubmit
+                .sink { [weak self] message in
+                    Task { await self?.sendRequest(message) }
+                }
+                .store(in: &cancellables)
+        }
 
         a2uiMessageProcessor.surfaceUpdates
             .sink { [weak self] update in
@@ -113,6 +116,12 @@ public final class GenUiConversation {
             history: history,
             clientCapabilities: clientCapabilities
         )
+    }
+
+    /// Clears all rendered surfaces and associated data models.
+    /// Use this before issuing a new request when the UI should reset.
+    public func clearSurfaces() {
+        a2uiMessageProcessor.clearSurfaces(emitUpdates: true)
     }
 
     private func handleSurfaceUpdate(_ update: GenUiUpdate) {

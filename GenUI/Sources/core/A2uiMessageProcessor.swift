@@ -142,6 +142,18 @@ public final class A2uiMessageProcessor: GenUiHost {
         dataModelsInternal.removeAll()
     }
 
+    /// Clears all surfaces and data models.
+    /// Emits `SurfaceRemoved` updates unless disabled.
+    public func clearSurfaces(emitUpdates: Bool = true) {
+        if emitUpdates {
+            for surfaceId in surfaces.keys {
+                surfaceUpdatesSubject.send(SurfaceRemoved(surfaceId: surfaceId))
+            }
+        }
+        surfaces.removeAll()
+        dataModelsInternal.removeAll()
+    }
+
     /// Processes an incoming A2UI message.
     /// Updates surfaces, data models, and update streams.
     public func handleMessage(_ message: A2uiMessage) {

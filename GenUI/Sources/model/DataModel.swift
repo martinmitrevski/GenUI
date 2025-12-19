@@ -164,7 +164,9 @@ public final class DataModel {
         let initialValue: T? = getValue(absolutePath)
 
         if let existing = subscriptions[absolutePath] as? ValueNotifier<T?> {
-            existing.value = initialValue
+            Task { @MainActor in
+                existing.value = initialValue
+            }
             return existing
         }
 

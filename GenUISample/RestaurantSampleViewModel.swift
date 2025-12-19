@@ -30,6 +30,7 @@ final class RestaurantSampleViewModel: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
 
     let conversation: GenUiConversation
+    private let messageProcessor: A2uiMessageProcessor
     let processingNotifier: ValueNotifier<Bool>
 
     init(serverUrlString: String = "http://localhost:10002") {
@@ -38,11 +39,13 @@ final class RestaurantSampleViewModel: ObservableObject {
 
         let catalog = CoreCatalogItems.asCatalog()
         let processor = A2uiMessageProcessor(catalogs: [catalog])
+        self.messageProcessor = processor
         let baseUrl = URL(string: serverUrlString) ?? URL(string: "http://localhost:10002")!
         let generator = A2uiContentGenerator(serverUrl: baseUrl)
         self.conversation = GenUiConversation(
             contentGenerator: generator,
-            a2uiMessageProcessor: processor
+            a2uiMessageProcessor: processor,
+            handleSubmitEvents: false
         )
         self.processingNotifier = conversation.isProcessing
 
@@ -62,6 +65,13 @@ final class RestaurantSampleViewModel: ObservableObject {
             self?.errorMessage = error.error.localizedDescription
         }
 
+        messageProcessor.onSubmit
+            .sink { [weak self] message in
+                self?.conversation.clearSurfaces()
+                Task { await self?.conversation.sendRequest(message) }
+            }
+            .store(in: &cancellables)
+
 
         processingNotifier.$value
             .receive(on: RunLoop.main)
@@ -76,6 +86,7 @@ final class RestaurantSampleViewModel: ObservableObject {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         errorMessage = nil
+        conversation.clearSurfaces()
         inputText = ""
         await conversation.sendRequest(UserMessage.text(trimmed))
     }
@@ -89,9 +100,7 @@ final class RestaurantSampleViewModel: ObservableObject {
     private func upsertSurfaceId(_ surfaceId: String) {
         guard !surfaceId.isEmpty else { return }
         if !surfaceIds.contains(surfaceId) {
-            Task { @MainActor in
-                surfaceIds.append(surfaceId)
-            }
+            surfaceIds.append(surfaceId)
         }
     }
 
