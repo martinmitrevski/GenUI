@@ -5,6 +5,8 @@
 import Foundation
 import Combine
 
+/// High-level facade that wires a generator to a UI host.
+/// Manages conversation history, surface updates, and callbacks.
 public final class GenUiConversation {
     public let contentGenerator: ContentGenerator
     public let a2uiMessageProcessor: A2uiMessageProcessor
@@ -18,8 +20,8 @@ public final class GenUiConversation {
     private var cancellables: Set<AnyCancellable> = []
     private let conversationNotifier = ValueNotifier<[ChatMessage]>([])
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a conversation facade with event callbacks.
+    /// Hooks generator output to the A2UI message processor.
     public init(
         contentGenerator: ContentGenerator,
         a2uiMessageProcessor: A2uiMessageProcessor,
@@ -68,8 +70,8 @@ public final class GenUiConversation {
             .store(in: &cancellables)
     }
 
-    /// Releases resources and closes streams.
-    /// Call when the instance is no longer needed.
+    /// Releases subscriptions and underlying resources.
+    /// Call when the conversation is no longer needed.
     public func dispose() {
         cancellables.removeAll()
         contentGenerator.dispose()
@@ -94,8 +96,8 @@ public final class GenUiConversation {
         a2uiMessageProcessor.getSurfaceNotifier(surfaceId)
     }
 
-    /// Sends a user message to the content generator.
-    /// Optionally passes history and client capabilities.
+    /// Sends a message to the content generator.
+    /// Automatically passes history and client capabilities.
     public func sendRequest(_ message: ChatMessage) async {
         let history = conversationNotifier.value
         if !(message is UserUiInteractionMessage) {

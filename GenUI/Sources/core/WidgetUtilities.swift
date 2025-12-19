@@ -6,13 +6,13 @@ import Foundation
 import SwiftUI
 
 /// SwiftUI helper that renders only when a value is non-nil.
-/// Pairs a ValueNotifier<T?> with a content builder.
+/// Observes a `ValueNotifier<T?>` and builds content when available.
 public struct OptionalValueBuilder<T, Content: View>: View {
     @ObservedObject private var notifier: ValueNotifier<T?>
     private let builder: (T) -> Content
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a builder driven by a nullable value notifier.
+    /// The builder is invoked only when a value is present.
     public init(listenable: ValueNotifier<T?>, builder: @escaping (T) -> Content) {
         self.notifier = listenable
         self.builder = builder
@@ -28,13 +28,13 @@ public struct OptionalValueBuilder<T, Content: View>: View {
 }
 
 /// SwiftUI helper that rebuilds on value changes.
-/// Wraps a ValueNotifier<T> and exposes its value to a builder.
+/// Observes a `ValueNotifier<T>` and feeds its current value to a builder.
 public struct ValueObserverView<T, Content: View>: View {
     @ObservedObject private var notifier: ValueNotifier<T>
     private let builder: (T) -> Content
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a view that rebuilds when the notifier changes.
+    /// The builder receives the current value each update.
     public init(listenable: ValueNotifier<T>, builder: @escaping (T) -> Content) {
         self.notifier = listenable
         self.builder = builder
@@ -45,9 +45,11 @@ public struct ValueObserverView<T, Content: View>: View {
     }
 }
 
-/// Scoped view into the DataModel at a path.
-/// Resolves relative paths for child widgets and subscriptions.
+/// Convenience subscriptions for data-bound widget values.
+/// Resolves data model paths and falls back to literal values.
 public extension DataContext {
+    /// Subscribes to a reference object with a literal fallback.
+    /// Uses `literalKey` when no path is provided.
     func subscribeToValue<T>(_ ref: JsonMap?, literalKey: String) -> ValueNotifier<T?> {
         genUiLogger.info("DataContext.subscribeToValue: ref=\(String(describing: ref)), literalKey=\(literalKey)")
         guard let ref else { return ValueNotifier<T?>(nil) }
@@ -65,21 +67,27 @@ public extension DataContext {
         return ValueNotifier<T?>(literal as? T)
     }
 
+    /// Subscribes to a string reference with literal fallback.
+    /// Expects the `literalString` key when no path is provided.
     func subscribeToString(_ ref: JsonMap?) -> ValueNotifier<String?> {
         subscribeToValue(ref, literalKey: "literalString")
     }
 
+    /// Subscribes to a boolean reference with literal fallback.
+    /// Expects the `literalBoolean` key when no path is provided.
     func subscribeToBool(_ ref: JsonMap?) -> ValueNotifier<Bool?> {
         subscribeToValue(ref, literalKey: "literalBoolean")
     }
 
+    /// Subscribes to an array reference with literal fallback.
+    /// Expects the `literalArray` key when no path is provided.
     func subscribeToObjectArray(_ ref: JsonMap?) -> ValueNotifier<[Any]?> {
         subscribeToValue(ref, literalKey: "literalArray")
     }
 }
 
-/// Resolve context API.
-/// Provides the public API for this declaration.
+/// Resolves action context bindings against the data model.
+/// Converts path-based entries into literal values.
 public func resolveContext(_ dataContext: DataContext, _ contextDefinitions: [Any]) -> JsonMap {
     var resolved: JsonMap = [:]
     for contextEntry in contextDefinitions {

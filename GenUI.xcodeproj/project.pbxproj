@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		84EB7ADB2EF5647300986E0F /* GenUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84EB7AD12EF5647200986E0F /* GenUI.framework */; };
+		84EB7B762EF588ED00986E0F /* GenUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84EB7AD12EF5647200986E0F /* GenUI.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +65,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				84EB7B762EF588ED00986E0F /* GenUI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -76,6 +78,7 @@
 				84EB7AD32EF5647200986E0F /* GenUI */,
 				84EB7ADE2EF5647300986E0F /* GenUITests */,
 				84EB7AEE2EF5649900986E0F /* GenUISample */,
+				84EB7B752EF588ED00986E0F /* Frameworks */,
 				84EB7AD22EF5647200986E0F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +91,13 @@
 				84EB7AED2EF5649900986E0F /* GenUISample.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		84EB7B752EF588ED00986E0F /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

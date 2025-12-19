@@ -4,7 +4,7 @@
 
 import Foundation
 
-/// Namespace for the default catalog items.
+/// Namespace for the default GenUI catalog items.
 /// Exposes the standard catalog and item references.
 public enum CoreCatalogItems {
     private static let audioPlayerItem = GenUI.audioPlayer
@@ -47,6 +47,8 @@ public enum CoreCatalogItems {
     public static let textField = textFieldItem
     public static let video = videoItem
 
+    /// Builds the standard catalog containing core components.
+    /// Use this to register the default widget set.
     public static func asCatalog() -> Catalog {
         Catalog(
             [

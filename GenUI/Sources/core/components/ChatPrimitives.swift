@@ -9,8 +9,8 @@ import SwiftUI
 public struct InternalMessageWidget: View {
     public let content: String
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a widget for an internal message.
+    /// The content is rendered as a muted system card.
     public init(content: String) {
         self.content = content
     }
@@ -28,14 +28,14 @@ public struct InternalMessageWidget: View {
 }
 
 /// SwiftUI view for a chat bubble row.
-/// Aligns text and icon based on message side.
+/// Aligns text and icon based on the message side.
 public struct ChatMessageWidget: View {
     public let text: String
     public let icon: String
     public let alignment: HorizontalAlignment
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a chat message bubble.
+    /// Provide the text, icon name, and alignment side.
     public init(text: String, icon: String, alignment: HorizontalAlignment) {
         self.text = text
         self.icon = icon

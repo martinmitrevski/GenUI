@@ -4,8 +4,8 @@
 
 import Foundation
 
-/// Represents a data model path.
-/// Supports joining, comparison, and absolute vs. relative semantics.
+/// Represents a path inside the GenUI data model.
+/// Supports absolute or relative addressing and path composition.
 public struct DataPath: Hashable, CustomStringConvertible {
     public let segments: [String]
     public let isAbsolute: Bool
@@ -13,8 +13,8 @@ public struct DataPath: Hashable, CustomStringConvertible {
     public static let root = DataPath(segments: [], isAbsolute: true)
     private static let separator = "/"
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Parses a string path into segments.
+    /// Leading `/` marks the path as absolute.
     public init(_ path: String) {
         let segments = path
             .split(separator: Character(Self.separator))
@@ -38,15 +38,15 @@ public struct DataPath: Hashable, CustomStringConvertible {
         return DataPath(segments: Array(segments.dropLast()), isAbsolute: isAbsolute)
     }
 
-    /// Join API.
-    /// Provides the public API for this declaration.
+    /// Joins another path onto this one.
+    /// Absolute paths replace the current path.
     public func join(_ other: DataPath) -> DataPath {
         if other.isAbsolute { return other }
         return DataPath(segments: segments + other.segments, isAbsolute: isAbsolute)
     }
 
-    /// Starts with API.
-    /// Provides the public API for this declaration.
+    /// Checks whether this path begins with another path.
+    /// Useful for deciding whether updates affect a subtree.
     public func startsWith(_ other: DataPath) -> Bool {
         guard other.segments.count <= segments.count else { return false }
         for (index, segment) in other.segments.enumerated() {
@@ -61,12 +61,14 @@ public struct DataPath: Hashable, CustomStringConvertible {
     }
 }
 
+/// Scoped view into a `DataModel` rooted at a path.
+/// Resolves relative paths and exposes subscriptions to values.
 public final class DataContext {
     private let dataModel: DataModel
     public let path: DataPath
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a data context rooted at the provided path.
+    /// The path may be absolute or relative to the model root.
     public init(_ dataModel: DataModel, _ path: String) {
         self.dataModel = dataModel
         self.path = DataPath(path)
@@ -77,56 +79,58 @@ public final class DataContext {
         self.path = path
     }
 
-    /// Subscribes to a data model path.
-    /// Returns a ValueNotifier that updates on changes.
+    /// Subscribes to a path relative to this context.
+    /// Returns a notifier that updates when the value changes.
     public func subscribe<T>(_ relativeOrAbsolutePath: DataPath) -> ValueNotifier<T?> {
         let absolutePath = resolvePath(relativeOrAbsolutePath)
         return dataModel.subscribe(absolutePath)
     }
 
-    /// Reads a value at a data model path.
-    /// Returns nil if the path is missing.
+    /// Reads a value relative to this context.
+    /// Returns nil if the resolved path is missing.
     public func getValue<T>(_ relativeOrAbsolutePath: DataPath) -> T? {
         let absolutePath = resolvePath(relativeOrAbsolutePath)
         return dataModel.getValue(absolutePath)
     }
 
-    /// Updates a value in the data model.
+    /// Updates a value relative to this context.
     /// Notifies subscribers for affected paths.
     public func update(_ relativeOrAbsolutePath: DataPath, _ contents: Any?) {
         let absolutePath = resolvePath(relativeOrAbsolutePath)
         dataModel.update(absolutePath: absolutePath, contents: contents)
     }
 
-    /// Creates a child data context.
-    /// Resolves the given path relative to the current context.
+    /// Creates a nested context for a child path.
+    /// The returned context resolves paths under the new root.
     public func nested(_ relativePath: DataPath) -> DataContext {
         let newPath = resolvePath(relativePath)
         return DataContext(dataModel: dataModel, path: newPath)
     }
 
-    /// Resolves a relative path to an absolute path.
-    /// Leaves absolute paths unchanged.
+    /// Resolves a path relative to this context.
+    /// Absolute paths are returned unchanged.
     public func resolvePath(_ pathToResolve: DataPath) -> DataPath {
         if pathToResolve.isAbsolute { return pathToResolve }
         return path.join(pathToResolve)
     }
 }
 
+/// Stores key-value data for dynamic UI components.
+/// Supports path subscriptions and incremental updates.
 public final class DataModel {
     private var data: JsonMap = [:]
     private var subscriptions: [DataPath: AnyValueNotifier] = [:]
     private var valueSubscriptions: [DataPath: AnyValueNotifier] = [:]
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates an empty data model.
+    /// Use `update` to populate data.
     public init() {}
 
     public var snapshot: JsonMap {
         data
     }
 
-    /// Updates a value in the data model.
+    /// Updates the data model at a given absolute path.
     /// Notifies subscribers for affected paths.
     public func update(absolutePath: DataPath?, contents: Any?) {
         genUiLogger.info("DataModel.update: path=\(String(describing: absolutePath)), contents=\(String(describing: contents))")
@@ -153,8 +157,8 @@ public final class DataModel {
         notifySubscribers(path: absolutePath)
     }
 
-    /// Subscribes to a data model path.
-    /// Returns a ValueNotifier that updates on changes.
+    /// Subscribes to an absolute path.
+    /// Returns a notifier that updates when the value changes.
     public func subscribe<T>(_ absolutePath: DataPath) -> ValueNotifier<T?> {
         genUiLogger.info("DataModel.subscribe: path=\(absolutePath)")
         let initialValue: T? = getValue(absolutePath)
@@ -169,8 +173,8 @@ public final class DataModel {
         return notifier
     }
 
-    /// Subscribes to a path with literal fallback.
-    /// Initializes the value if a literal is provided.
+    /// Subscribes to a path with literal fallback support.
+    /// Initializes the notifier with the current path value.
     public func subscribeToValue<T>(_ absolutePath: DataPath) -> ValueNotifier<T?> {
         genUiLogger.info("DataModel.subscribeToValue: path=\(absolutePath)")
         let initialValue: T? = getValue(absolutePath)
@@ -185,7 +189,7 @@ public final class DataModel {
         return notifier
     }
 
-    /// Reads a value at a data model path.
+    /// Reads a value at an absolute path.
     /// Returns nil if the path is missing.
     public func getValue<T>(_ absolutePath: DataPath) -> T? {
         getValue(current: data, segments: absolutePath.segments) as? T

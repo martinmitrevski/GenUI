@@ -5,20 +5,20 @@
 import Foundation
 import Combine
 
-/// Protocol for surface update notifications.
+/// Marker protocol for surface update notifications.
 /// Implemented by add/update/remove events emitted by the processor.
 public protocol GenUiUpdate {
     var surfaceId: String { get }
 }
 
 /// Notification emitted when a surface is created.
-/// Includes the surface id and the initial UiDefinition.
+/// Includes the surface id and the initial `UiDefinition`.
 public struct SurfaceAdded: GenUiUpdate {
     public let surfaceId: String
     public let definition: UiDefinition
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a surface-added update.
+    /// Includes the surface id and initial definition.
     public init(surfaceId: String, definition: UiDefinition) {
         self.surfaceId = surfaceId
         self.definition = definition
@@ -26,13 +26,13 @@ public struct SurfaceAdded: GenUiUpdate {
 }
 
 /// Notification emitted when a surface changes.
-/// Includes the surface id and the updated UiDefinition.
+/// Includes the surface id and updated `UiDefinition`.
 public struct SurfaceUpdated: GenUiUpdate {
     public let surfaceId: String
     public let definition: UiDefinition
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a surface-updated notification.
+    /// Includes the surface id and updated definition.
     public init(surfaceId: String, definition: UiDefinition) {
         self.surfaceId = surfaceId
         self.definition = definition
@@ -44,8 +44,8 @@ public struct SurfaceUpdated: GenUiUpdate {
 public struct SurfaceRemoved: GenUiUpdate {
     public let surfaceId: String
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a surface-removed notification.
+    /// Includes the surface id that was removed.
     public init(surfaceId: String) {
         self.surfaceId = surfaceId
     }
@@ -55,13 +55,25 @@ public struct SurfaceRemoved: GenUiUpdate {
 /// Provides surface streams, catalogs, and event handling.
 public protocol GenUiHost {
     var surfaceUpdates: AnyPublisher<GenUiUpdate, Never> { get }
+
+    /// Returns a notifier for a surface definition.
+    /// The notifier updates when the surface definition changes.
     func getSurfaceNotifier(_ surfaceId: String) -> ValueNotifier<UiDefinition?>
+
     var catalogs: [Catalog] { get }
     var dataModels: [String: DataModel] { get }
+
+    /// Returns the data model for the given surface id.
+    /// Implementations may lazily create missing models.
     func dataModelForSurface(_ surfaceId: String) -> DataModel
+
+    /// Handles UI events emitted by rendered surfaces.
+    /// Hosts may forward events to agents or analytics.
     func handleUiEvent(_ event: UiEventProtocol)
 }
 
+/// Processes A2UI messages and maintains surface state.
+/// Acts as a `GenUiHost` for rendered surfaces.
 public final class A2uiMessageProcessor: GenUiHost {
     public let catalogs: [Catalog]
 
@@ -70,8 +82,8 @@ public final class A2uiMessageProcessor: GenUiHost {
     private let onSubmitSubject = PassthroughSubject<UserUiInteractionMessage, Never>()
     private var dataModelsInternal: [String: DataModel] = [:]
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a message processor with the provided catalogs.
+    /// Catalogs are used to render component definitions.
     public init(catalogs: [Catalog]) {
         self.catalogs = catalogs
     }
@@ -123,8 +135,8 @@ public final class A2uiMessageProcessor: GenUiHost {
         return notifier
     }
 
-    /// Releases resources and closes streams.
-    /// Call when the instance is no longer needed.
+    /// Releases cached surfaces and data models.
+    /// Call when the processor is no longer needed.
     public func dispose() {
         surfaces.removeAll()
         dataModelsInternal.removeAll()

@@ -6,13 +6,13 @@ import SwiftUI
 import Combine
 
 /// SwiftUI view that renders catalog examples.
-/// Useful for development and visual validation.
+/// Useful for development and visual validation of widgets.
 public struct DebugCatalogView: View {
     @StateObject private var viewModel: DebugCatalogViewModel
     public let itemHeight: CGFloat?
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a debug view for catalog examples.
+    /// Provide a catalog and optional submit handler.
     public init(
         catalog: Catalog,
         onSubmit: ((UserUiInteractionMessage) -> Void)? = nil,

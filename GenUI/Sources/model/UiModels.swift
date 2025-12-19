@@ -4,15 +4,15 @@
 
 import Foundation
 
-/// Callback invoked when UI events are batched.
-/// Provides the surface id and event list.
+/// Sends a batch of UI events for a surface.
+/// Provides the surface id and the collected events.
 public typealias SendEventsCallback = (String, [UiEventProtocol]) -> Void
-/// Callback invoked for a single UI event.
-/// Used by catalog widgets to send interactions.
+/// Dispatches a single UI event.
+/// Used by widgets to report user interactions.
 public typealias DispatchEventCallback = (UiEventProtocol) -> Void
 
-/// Protocol for UI event payloads.
-/// Defines required fields for surface and widget events.
+/// Protocol describing a UI event payload.
+/// Exposes surface metadata and a JSON serialization hook.
 public protocol UiEventProtocol {
     var surfaceId: String { get }
     var widgetId: String { get }
@@ -23,13 +23,13 @@ public protocol UiEventProtocol {
     func toMap() -> JsonMap
 }
 
-/// Concrete event wrapper backed by a JsonMap.
-/// Provides typed accessors to event fields.
+/// Concrete UI event backed by a JSON map.
+/// Provides typed accessors to standard event fields.
 public struct UiEvent: UiEventProtocol {
     private let json: JsonMap
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Wraps an existing event payload.
+    /// Use this to provide typed access over a JSON map.
     public init(fromMap json: JsonMap) {
         self.json = json
     }
@@ -48,18 +48,18 @@ public struct UiEvent: UiEventProtocol {
         return Date()
     }
 
-    /// To map API.
-    /// Provides the public API for this declaration.
+    /// Returns the underlying JSON payload.
+    /// Use this when serializing events for transport.
     public func toMap() -> JsonMap { json }
 }
 
 /// Event representing a user-triggered action.
-/// Includes action name, source id, and optional context.
+/// Includes action name, source component id, and optional context.
 public struct UserActionEvent: UiEventProtocol {
     private let json: JsonMap
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a user action event payload.
+    /// Use this when emitting button taps or similar actions.
     public init(
         surfaceId: String? = nil,
         name: String,
@@ -80,8 +80,8 @@ public struct UserActionEvent: UiEventProtocol {
         self.json = json
     }
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Wraps an existing action payload.
+    /// Use this when parsing action events from JSON.
     public init(fromMap json: JsonMap) {
         self.json = json
     }
@@ -104,13 +104,13 @@ public struct UserActionEvent: UiEventProtocol {
     public var sourceComponentId: String { json["sourceComponentId"] as? String ?? "" }
     public var context: JsonMap { json["context"] as? JsonMap ?? [:] }
 
-    /// To map API.
-    /// Provides the public API for this declaration.
+    /// Returns the underlying JSON payload.
+    /// Use this when serializing events for transport.
     public func toMap() -> JsonMap { json }
 }
 
 /// Snapshot of a rendered surface and its components.
-/// Holds the root component id, catalog id, and component map.
+/// Holds root id, catalog id, styles, and component map.
 public struct UiDefinition {
     public let surfaceId: String
     public let rootComponentId: String?
@@ -120,8 +120,8 @@ public struct UiDefinition {
     public var components: [String: Component] { _components }
     private let _components: [String: Component]
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a UI definition snapshot.
+    /// Provide surface metadata and component map.
     public init(
         surfaceId: String,
         rootComponentId: String? = nil,
@@ -136,8 +136,8 @@ public struct UiDefinition {
         self.styles = styles
     }
 
-    /// Creates a copy with updated fields.
-    /// Unspecified values fall back to the original instance.
+    /// Copies the definition while overriding selected fields.
+    /// Omitted parameters keep their existing values.
     public func copyWith(
         rootComponentId: String? = nil,
         catalogId: String? = nil,
@@ -153,7 +153,7 @@ public struct UiDefinition {
         )
     }
 
-    /// Serializes the value to a JSON-compatible dictionary.
+    /// Serializes the definition to a JSON map.
     /// The output is suitable for transport or logging.
     public func toJson() -> JsonMap {
         [
@@ -164,7 +164,7 @@ public struct UiDefinition {
     }
 
     /// Formats the UI definition as context text.
-    /// Used to describe the UI to language models.
+    /// Useful when describing the current UI to an LLM.
     public func asContextDescriptionText() -> String {
         let payload = toJson()
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
@@ -176,20 +176,22 @@ public struct UiDefinition {
 }
 
 /// A single UI component instance in a surface.
-/// Stores the component id, properties, and optional layout weight.
+/// Stores component id, properties, and optional layout weight.
 public struct Component: Equatable {
     public let id: String
     public let componentProperties: JsonMap
     public let weight: Int?
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a component instance.
+    /// Provide the id, component properties, and optional weight.
     public init(id: String, componentProperties: JsonMap, weight: Int? = nil) {
         self.id = id
         self.componentProperties = componentProperties
         self.weight = weight
     }
 
+    /// Parses a component definition from a JSON map.
+    /// Handles missing component properties by returning an empty map.
     public static func fromJson(_ json: JsonMap) -> Component {
         guard let component = json["component"] as? JsonMap else {
             return Component(id: json["id"] as? String ?? "", componentProperties: [:])
@@ -201,7 +203,7 @@ public struct Component: Equatable {
         )
     }
 
-    /// Serializes the value to a JSON-compatible dictionary.
+    /// Serializes the component to a JSON map.
     /// The output is suitable for transport or logging.
     public func toJson() -> JsonMap {
         var json: JsonMap = ["id": id, "component": componentProperties]
@@ -215,6 +217,8 @@ public struct Component: Equatable {
         componentProperties.keys.first ?? ""
     }
 
+    /// Compares two components by id, weight, and properties.
+    /// Uses dictionary equality for component properties.
     public static func == (lhs: Component, rhs: Component) -> Bool {
         let lhsMap = NSDictionary(dictionary: lhs.componentProperties)
         return lhs.id == rhs.id && lhs.weight == rhs.weight && lhsMap.isEqual(to: rhs.componentProperties)

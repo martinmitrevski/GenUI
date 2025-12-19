@@ -5,33 +5,37 @@
 import Foundation
 import Combine
 
-/// Wraps errors emitted by a content generator.
-/// Carries the underlying error and an optional stack trace string for reporting.
+/// Error wrapper surfaced by a content generator.
+/// Carries the underlying error plus an optional stack trace string.
 public struct ContentGeneratorError: Error {
     public let error: Error
     public let stackTrace: String
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates an error wrapper with an optional stack trace.
+    /// Use this to forward generator failures through the error stream.
     public init(_ error: Error, stackTrace: String = "") {
         self.error = error
         self.stackTrace = stackTrace
     }
 }
 
-/// Protocol for components that produce A2UI messages and text responses.
-/// Defines streams, processing state, and the request lifecycle used by GenUI.
+/// Produces A2UI messages and text responses for GenUI surfaces.
+/// Exposes streams, processing state, and a request lifecycle contract.
 public protocol ContentGenerator {
     var a2uiMessageStream: AnyPublisher<A2uiMessage, Never> { get }
     var textResponseStream: AnyPublisher<String, Never> { get }
     var errorStream: AnyPublisher<ContentGeneratorError, Never> { get }
     var isProcessing: ValueNotifier<Bool> { get }
 
+    /// Sends a message to the generator for processing.
+    /// Provide optional history and client capabilities to shape the response.
     func sendRequest(
         _ message: ChatMessage,
         history: [ChatMessage]?,
         clientCapabilities: A2UiClientCapabilities?
     ) async
 
+    /// Stops work and releases any underlying resources.
+    /// Call this when the generator is no longer needed.
     func dispose()
 }

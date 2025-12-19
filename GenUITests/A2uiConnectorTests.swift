@@ -9,7 +9,13 @@ import Testing
 
 final class MockA2AClient: A2AClientProtocol {
     func getAgentCard() async throws -> A2AAgentCard {
-        A2AAgentCard(name: "Agent", description: "Description", version: "1.0")
+        A2AAgentCard(
+            name: "Agent",
+            description: "Description",
+            version: "1.0",
+            url: "https://example.com",
+            capabilities: A2AAgentCapabilities(streaming: true)
+        )
     }
 
     func sendMessageStream(_ payload: A2AMessageSendParams) -> AsyncThrowingStream<A2ASendStreamMessageResponse, Error> {

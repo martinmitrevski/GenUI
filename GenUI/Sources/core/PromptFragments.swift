@@ -5,7 +5,7 @@
 import Foundation
 
 /// Prompt snippets used to guide UI generation.
-/// Includes reusable system guidance for A2UI tools.
+/// Contains reusable system guidance for A2UI tools.
 public enum GenUiPromptFragments {
     public static let basicChat = """
 

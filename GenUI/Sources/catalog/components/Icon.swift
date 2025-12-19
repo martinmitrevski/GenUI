@@ -124,6 +124,8 @@ public enum AvailableIcons: String, CaseIterable {
         allCases.map { $0.rawValue }
     }
 
+    /// Resolves an icon by its A2UI name.
+    /// Returns nil if the name is not supported.
     public static func fromName(_ name: String) -> AvailableIcons? {
         allCases.first { $0.rawValue == name }
     }

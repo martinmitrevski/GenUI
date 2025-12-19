@@ -4,10 +4,10 @@
 
 import Foundation
 
-/// Placeholder build context for catalog builders.
-/// Provides a stable type for potential future extensions.
+/// Build context passed to catalog widgets.
+/// Reserved for future rendering configuration.
 public struct GenUiBuildContext {
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates an empty build context.
+    /// Use this type for future rendering configuration hooks.
     public init() {}
 }

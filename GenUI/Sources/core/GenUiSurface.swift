@@ -5,7 +5,7 @@
 import SwiftUI
 
 /// SwiftUI view that renders a dynamic GenUI surface.
-/// Builds a component tree from a UiDefinition and dispatches UI events.
+/// Builds a component tree from a `UiDefinition` and dispatches UI events.
 public struct GenUiSurface: View {
     public let host: GenUiHost
     public let surfaceId: String
@@ -15,8 +15,8 @@ public struct GenUiSurface: View {
     @State private var modalContent: AnyView = AnyView(EmptyView())
     @State private var isPresentingModal = false
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a GenUI surface bound to a host and surface id.
+    /// Provide a default view builder for empty or missing surfaces.
     public init(host: GenUiHost, surfaceId: String, defaultBuilder: (() -> AnyView)? = nil) {
         self.host = host
         self.surfaceId = surfaceId

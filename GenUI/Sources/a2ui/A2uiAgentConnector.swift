@@ -5,15 +5,15 @@
 import Foundation
 import Combine
 
-/// Metadata describing an A2UI agent.
-/// Includes name, description, and version.
+/// Basic metadata describing an A2UI agent.
+/// Includes name, description, and version strings.
 public struct AgentCard {
     public let name: String
     public let description: String
     public let version: String
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates an agent card payload.
+    /// Use this to surface agent metadata in UIs.
     public init(name: String, description: String, version: String) {
         self.name = name
         self.description = description
@@ -21,6 +21,8 @@ public struct AgentCard {
     }
 }
 
+/// Connects to an A2UI agent over A2A and streams responses.
+/// Translates A2A messages into `A2uiMessage` updates.
 public final class A2uiAgentConnector {
     public let url: URL
 
@@ -35,11 +37,11 @@ public final class A2uiAgentConnector {
         contextIdValue
     }
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a connector for the given server URL.
+    /// Optionally inject a custom A2A client and context id.
     public init(url: URL, client: A2AClientProtocol? = nil, contextId: String? = nil) {
         self.url = url
-        self.client = client ?? NoopA2AClient()
+        self.client = client ?? A2AClient(baseUrl: url.absoluteString)
         self.contextIdValue = contextId
     }
 
@@ -51,8 +53,8 @@ public final class A2uiAgentConnector {
         errorController.eraseToAnyPublisher()
     }
 
-    /// Fetches the agent card from the client.
-    /// Returns name, description, and version metadata.
+    /// Fetches the agent card from the A2A client.
+    /// Returns the parsed name, description, and version.
     public func getAgentCard() async throws -> AgentCard {
         let card = try await client.getAgentCard()
         return AgentCard(name: card.name, description: card.description, version: card.version)
@@ -142,7 +144,7 @@ public final class A2uiAgentConnector {
                     let code = errorResponse.error?.rpcErrorCode
                     let errorMessage = "A2A Error: \(String(describing: code))"
                     genUiLogger.severe(errorMessage)
-                    errorController.send(A2AClientError.notImplemented)
+                    errorController.send(A2AClientError.invalidResponse)
                     continue
                 }
 
@@ -230,7 +232,7 @@ public final class A2uiAgentConnector {
     }
 
     /// Releases resources and closes streams.
-    /// Call when the instance is no longer needed.
+    /// Call when the connector is no longer needed.
     public func dispose() {
         controller.send(completion: .finished)
         errorController.send(completion: .finished)

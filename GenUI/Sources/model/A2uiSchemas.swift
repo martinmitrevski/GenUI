@@ -4,9 +4,11 @@
 
 import Foundation
 
-/// Reusable schema builders for A2UI payloads.
-/// Defines common references and message shapes.
+/// Schema builders for A2UI payloads and references.
+/// Use these helpers to construct JSON schemas for tool definitions.
 public enum A2uiSchemas {
+    /// Builds a schema for string references.
+    /// Supports data model paths or literal string values.
     public static func stringReference(description: String? = nil, enumValues: [String]? = nil) -> Schema {
         S.object(
             description: description,
@@ -20,6 +22,8 @@ public enum A2uiSchemas {
         )
     }
 
+    /// Builds a schema for numeric references.
+    /// Supports data model paths or literal numbers.
     public static func numberReference(description: String? = nil) -> Schema {
         S.object(
             description: description,
@@ -30,6 +34,8 @@ public enum A2uiSchemas {
         )
     }
 
+    /// Builds a schema for boolean references.
+    /// Supports data model paths or literal booleans.
     public static func booleanReference(description: String? = nil) -> Schema {
         S.object(
             description: description,
@@ -40,10 +46,14 @@ public enum A2uiSchemas {
         )
     }
 
+    /// Builds a schema for a single component id reference.
+    /// Use this for properties that point to one child component.
     public static func componentReference(description: String? = nil) -> Schema {
         S.string(description: description)
     }
 
+    /// Builds a schema for child component lists.
+    /// Supports explicit lists or template bindings.
     public static func componentArrayReference(description: String? = nil) -> Schema {
         S.object(
             description: description,
@@ -60,6 +70,8 @@ public enum A2uiSchemas {
         )
     }
 
+    /// Builds a schema for UI actions.
+    /// Includes an action name and optional key/value context payloads.
     public static func action(description: String? = nil) -> Schema {
         S.object(
             description: description,
@@ -87,6 +99,8 @@ public enum A2uiSchemas {
         )
     }
 
+    /// Builds a schema for string array references.
+    /// Supports data model paths or literal string lists.
     public static func stringArrayReference(description: String? = nil) -> Schema {
         S.object(
             description: description,
@@ -97,6 +111,8 @@ public enum A2uiSchemas {
         )
     }
 
+    /// Builds a schema for begin-rendering messages.
+    /// Includes surface id, root id, styles, and catalog id.
     public static func beginRenderingSchema() -> Schema {
         S.object(
             properties: [
@@ -114,6 +130,8 @@ public enum A2uiSchemas {
         )
     }
 
+    /// Builds a begin-rendering schema without catalog id.
+    /// Use when the catalog is implicitly selected.
     public static func beginRenderingSchemaNoCatalogId() -> Schema {
         S.object(
             properties: [
@@ -130,6 +148,8 @@ public enum A2uiSchemas {
         )
     }
 
+    /// Builds a schema for surface deletion messages.
+    /// Includes the surface id to remove.
     public static func surfaceDeletionSchema() -> Schema {
         S.object(
             properties: [surfaceIdKey: S.string()],
@@ -137,6 +157,8 @@ public enum A2uiSchemas {
         )
     }
 
+    /// Builds a schema for data model update messages.
+    /// Includes surface id, optional path, and update contents.
     public static func dataModelUpdateSchema() -> Schema {
         S.object(
             properties: [
@@ -148,6 +170,8 @@ public enum A2uiSchemas {
         )
     }
 
+    /// Builds a schema for surface updates using a catalog.
+    /// Expands component definitions from the catalog schema.
     public static func surfaceUpdateSchema(catalog: Catalog) -> Schema {
         var componentProperties: [String: Schema] = [:]
         if let catalogDefinition = catalog.definition as? ObjectSchema,

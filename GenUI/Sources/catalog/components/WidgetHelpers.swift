@@ -31,8 +31,8 @@ public struct ComponentChildrenBuilder: View {
     public let explicitListBuilder: ExplicitListWidgetBuilder
     public let templateListWidgetBuilder: TemplateListWidgetBuilder
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a child renderer for list or template bindings.
+    /// Provide builders for explicit lists and template-driven lists.
     public init(
         childrenData: Any?,
         dataContext: DataContext,
@@ -83,8 +83,8 @@ public struct ComponentChildrenBuilder: View {
     }
 }
 
-/// Builds weightedchild resources.
-/// Returns a constructed value based on the current context.
+/// Builds a child view with optional layout weight.
+/// Applies `layoutPriority` when a weight is provided.
 public func buildWeightedChild(
     componentId: String,
     dataContext: DataContext,

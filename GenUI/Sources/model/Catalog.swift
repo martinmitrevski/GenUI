@@ -5,21 +5,21 @@
 import Foundation
 import SwiftUI
 
-/// Collection of catalog items available to the renderer.
+/// Catalog of UI components available to the renderer.
 /// Builds widgets from component data and exposes a schema description.
 public struct Catalog {
     public let items: [CatalogItem]
     public let catalogId: String?
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a catalog with optional id metadata.
+    /// Provide the catalog items in renderable order.
     public init(_ items: [CatalogItem], catalogId: String? = nil) {
         self.items = items
         self.catalogId = catalogId
     }
 
-    /// Creates a copy with updated fields.
-    /// Unspecified values fall back to the original instance.
+    /// Merges new items into the catalog.
+    /// Items with matching names replace existing entries.
     public func copyWith(_ newItems: [CatalogItem], catalogId: String? = nil) -> Catalog {
         var itemsByName: [String: CatalogItem] = [:]
         for item in items {
@@ -31,15 +31,15 @@ public struct Catalog {
         return Catalog(Array(itemsByName.values), catalogId: catalogId ?? self.catalogId)
     }
 
-    /// Copy without API.
-    /// Provides the public API for this declaration.
+    /// Creates a copy without the specified items.
+    /// Matches items by name before removing them.
     public func copyWithout(_ itemNames: [CatalogItem], catalogId: String? = nil) -> Catalog {
         let namesToRemove = Set(itemNames.map { $0.name })
         let updatedItems = items.filter { !namesToRemove.contains($0.name) }
         return Catalog(updatedItems, catalogId: catalogId ?? self.catalogId)
     }
 
-    /// Builds a SwiftUI view from catalog data.
+    /// Builds a SwiftUI view from a catalog item context.
     /// Resolves the component type and invokes its builder.
     public func buildWidget(_ itemContext: CatalogItemContext) -> AnyView {
         guard let widgetData = itemContext.data as? JsonMap,

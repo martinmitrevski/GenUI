@@ -5,21 +5,21 @@
 import Foundation
 import SwiftUI
 
-/// Callback for resolving components by id.
-/// Returns the Component or nil if missing.
+/// Looks up a component by id within a surface.
+/// Returns nil when the component cannot be found.
 public typealias GetComponentCallback = (String) -> Component?
-/// Callback to build a child component view.
-/// Accepts a component id and optional data context.
+/// Builds a SwiftUI view for a child component.
+/// Accepts a component id and an optional data context override.
 public typealias ChildBuilderCallback = (String, DataContext?) -> AnyView
-/// Callback that returns JSON example data.
-/// Used by debug tooling to render catalog samples.
+/// Generates a JSON example string for a catalog item.
+/// Used by debug tooling to render sample widgets.
 public typealias ExampleBuilderCallback = () -> String
-/// Callback that builds a catalog item view.
-/// Receives a CatalogItemContext for rendering.
+/// Builds the widget view for a catalog item.
+/// Receives a rendering context with data and helpers.
 public typealias CatalogWidgetBuilder = (CatalogItemContext) -> AnyView
 
-/// Context passed to catalog item builders.
-/// Provides component data, child builders, and event dispatch hooks.
+/// Rendering context passed to a catalog widget builder.
+/// Includes data, child builders, and event dispatch utilities.
 public struct CatalogItemContext {
     public let data: Any
     public let id: String
@@ -31,16 +31,16 @@ public struct CatalogItemContext {
     public let surfaceId: String
 }
 
-/// Definition for a single catalog component.
-/// Includes schema, widget builder, and example data generators.
+/// Defines a single catalog component.
+/// Holds the schema, renderer, and sample data generators.
 public struct CatalogItem {
     public let name: String
     public let dataSchema: Schema
     public let widgetBuilder: CatalogWidgetBuilder
     public let exampleData: [ExampleBuilderCallback]
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a catalog item definition.
+    /// Provide the schema and widget builder for rendering.
     public init(
         name: String,
         dataSchema: Schema,

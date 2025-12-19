@@ -4,11 +4,13 @@
 
 import Foundation
 
+/// Tool that applies surface updates from tool calls.
+/// Converts JSON payloads into `SurfaceUpdate` messages.
 public final class SurfaceUpdateTool: AiTool<JsonMap> {
     private let handleMessage: (A2uiMessage) -> Void
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a surface update tool.
+    /// Provide a handler to receive parsed A2UI messages.
     public init(handleMessage: @escaping (A2uiMessage) -> Void, catalog: Catalog) {
         self.handleMessage = handleMessage
         super.init(
@@ -18,6 +20,8 @@ public final class SurfaceUpdateTool: AiTool<JsonMap> {
         )
     }
 
+    /// Parses args into a `SurfaceUpdate` and forwards it.
+    /// Returns a status payload for the tool response.
     public override func invoke(_ args: JsonMap) async -> JsonMap {
         let surfaceId = args[surfaceIdKey] as? String ?? ""
         let components = (args["components"] as? [Any] ?? []).compactMap { item -> Component? in
@@ -36,11 +40,13 @@ public final class SurfaceUpdateTool: AiTool<JsonMap> {
     }
 }
 
+/// Tool that deletes an existing surface.
+/// Converts tool calls into `SurfaceDeletion` messages.
 public final class DeleteSurfaceTool: AiTool<JsonMap> {
     private let handleMessage: (A2uiMessage) -> Void
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a delete-surface tool.
+    /// Provide a handler to receive parsed A2UI messages.
     public init(handleMessage: @escaping (A2uiMessage) -> Void) {
         self.handleMessage = handleMessage
         super.init(
@@ -55,6 +61,8 @@ public final class DeleteSurfaceTool: AiTool<JsonMap> {
         )
     }
 
+    /// Parses args into a `SurfaceDeletion` and forwards it.
+    /// Returns a status payload for the tool response.
     public override func invoke(_ args: JsonMap) async -> JsonMap {
         let surfaceId = args[surfaceIdKey] as? String ?? ""
         handleMessage(SurfaceDeletion(surfaceId: surfaceId))
@@ -62,12 +70,14 @@ public final class DeleteSurfaceTool: AiTool<JsonMap> {
     }
 }
 
+/// Tool that begins rendering a surface.
+/// Converts tool calls into `BeginRendering` messages.
 public final class BeginRenderingTool: AiTool<JsonMap> {
     private let handleMessage: (A2uiMessage) -> Void
     private let catalogId: String?
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a begin-rendering tool.
+    /// Provide a handler and optional catalog id override.
     public init(handleMessage: @escaping (A2uiMessage) -> Void, catalogId: String? = nil) {
         self.handleMessage = handleMessage
         self.catalogId = catalogId
@@ -78,6 +88,8 @@ public final class BeginRenderingTool: AiTool<JsonMap> {
         )
     }
 
+    /// Parses args into a `BeginRendering` and forwards it.
+    /// Returns a status payload for the tool response.
     public override func invoke(_ args: JsonMap) async -> JsonMap {
         let surfaceId = args[surfaceIdKey] as? String ?? ""
         let root = args["root"] as? String ?? ""

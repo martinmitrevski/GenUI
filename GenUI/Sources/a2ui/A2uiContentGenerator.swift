@@ -5,6 +5,8 @@
 import Foundation
 import Combine
 
+/// Content generator backed by an A2UI agent connector.
+/// Streams UI messages and forwards text responses to subscribers.
 public final class A2uiContentGenerator: ContentGenerator {
     public let connector: A2uiAgentConnector
 
@@ -13,8 +15,8 @@ public final class A2uiContentGenerator: ContentGenerator {
     private let isProcessingNotifier = ValueNotifier<Bool>(false)
     private var cancellables: Set<AnyCancellable> = []
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a generator for a given A2UI server URL.
+    /// Optionally inject a preconfigured connector.
     public init(serverUrl: URL, connector: A2uiAgentConnector? = nil) {
         self.connector = connector ?? A2uiAgentConnector(url: serverUrl)
 
@@ -42,15 +44,15 @@ public final class A2uiContentGenerator: ContentGenerator {
     }
 
     /// Releases resources and closes streams.
-    /// Call when the instance is no longer needed.
+    /// Call when the generator is no longer needed.
     public func dispose() {
         textResponseController.send(completion: .finished)
         connector.dispose()
         cancellables.removeAll()
     }
 
-    /// Sends a user message to the content generator.
-    /// Optionally passes history and client capabilities.
+    /// Sends a message to the A2UI agent.
+    /// Forwards optional client capabilities to the server.
     public func sendRequest(
         _ message: ChatMessage,
         history: [ChatMessage]?,

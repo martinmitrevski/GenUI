@@ -4,10 +4,15 @@
 
 import Foundation
 
-/// Protocol for tool call parts.
+/// Protocol for tool-call parts used by integrations.
 /// Supports parsing from JSON and serialization.
 public protocol Part {
+    /// Parses a part from a JSON map.
+    /// Throws when the payload cannot be decoded.
     static func fromJson(_ json: JsonMap) throws -> Part
+
+    /// Serializes the part to a JSON map.
+    /// Use this when emitting tool payloads.
     func toJson() -> JsonMap
 }
 
@@ -17,13 +22,15 @@ public struct ToolCall: Part {
     public let args: Any?
     public let name: String
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a tool call with name and raw arguments.
+    /// Use this when constructing tool calls manually.
     public init(args: Any?, name: String) {
         self.args = args
         self.name = name
     }
 
+    /// Parses a tool call from a JSON map.
+    /// Expects `"type": "ToolCall"` in the payload.
     public static func fromJson(_ json: JsonMap) throws -> Part {
         guard let type = json["type"] as? String, type == "ToolCall" else {
             throw GenUiError.unknownMessageType(json)
@@ -31,7 +38,7 @@ public struct ToolCall: Part {
         return ToolCall(args: json["args"], name: json["name"] as? String ?? "")
     }
 
-    /// Serializes the value to a JSON-compatible dictionary.
+    /// Serializes the tool call to a JSON map.
     /// The output is suitable for transport or logging.
     public func toJson() -> JsonMap {
         [
@@ -49,14 +56,16 @@ public struct GenUiFunctionDeclaration {
     public let name: String
     public let parameters: Any?
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a function declaration for an LLM.
+    /// Provide the name, description, and optional schema.
     public init(description: String, name: String, parameters: Any? = nil) {
         self.description = description
         self.name = name
         self.parameters = parameters
     }
 
+    /// Parses a function declaration from a JSON map.
+    /// Reads name, description, and parameters fields.
     public static func fromJson(_ json: JsonMap) -> GenUiFunctionDeclaration {
         GenUiFunctionDeclaration(
             description: json["description"] as? String ?? "",
@@ -65,7 +74,7 @@ public struct GenUiFunctionDeclaration {
         )
     }
 
-    /// Serializes the value to a JSON-compatible dictionary.
+    /// Serializes the declaration to a JSON map.
     /// The output is suitable for transport or logging.
     public func toJson() -> JsonMap {
         [
@@ -82,8 +91,8 @@ public struct ParsedToolCall {
     public let messages: [A2uiMessage]
     public let surfaceId: String
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a parsed tool call result.
+    /// Provide the generated messages and surface id.
     public init(messages: [A2uiMessage], surfaceId: String) {
         self.messages = messages
         self.surfaceId = surfaceId

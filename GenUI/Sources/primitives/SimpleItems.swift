@@ -5,5 +5,5 @@
 import Foundation
 
 /// Dictionary alias for JSON-like payloads.
-/// Uses String keys with Any values for flexibility.
+/// Uses `String: Any` to represent loosely typed JSON values.
 public typealias JsonMap = [String: Any]

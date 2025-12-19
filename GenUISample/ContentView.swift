@@ -3,6 +3,7 @@
 //
 
 import SwiftUI
+import GenUI
 
 struct ContentView: View {
     var body: some View {
@@ -14,8 +15,4 @@ struct ContentView: View {
         }
         .padding()
     }
-}
-
-#Preview {
-    ContentView()
 }

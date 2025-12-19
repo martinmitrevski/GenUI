@@ -4,20 +4,20 @@
 
 import Foundation
 
-/// Describes which catalogs a client supports.
-/// Used to inform the server about available UI components.
+/// Describes the catalogs supported by the client.
+/// Sent to the server to advertise available UI components.
 public struct A2UiClientCapabilities {
     public let supportedCatalogIds: [String]
     public let inlineCatalogs: [JsonMap]?
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a capabilities payload.
+    /// Provide catalog ids and optionally inline catalog definitions.
     public init(supportedCatalogIds: [String], inlineCatalogs: [JsonMap]? = nil) {
         self.supportedCatalogIds = supportedCatalogIds
         self.inlineCatalogs = inlineCatalogs
     }
 
-    /// Serializes the value to a JSON-compatible dictionary.
+    /// Serializes the payload to a JSON map.
     /// The output is suitable for transport or logging.
     public func toJson() -> JsonMap {
         var json: JsonMap = ["supportedCatalogIds": supportedCatalogIds]

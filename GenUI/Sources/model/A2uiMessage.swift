@@ -4,13 +4,15 @@
 
 import Foundation
 
-/// Marker protocol for A2UI messages.
-/// Implemented by surface, data model, and rendering commands.
+/// Marker protocol for all A2UI message types.
+/// Conforming types represent surface, data, or rendering commands.
 public protocol A2uiMessage {}
 
-/// A2ui message factory API.
-/// Provides the public API for this declaration.
+/// Factory helpers for parsing and describing A2UI messages.
+/// Use these helpers when decoding or generating message schemas.
 public enum A2uiMessageFactory {
+    /// Parses a top-level A2UI message payload.
+    /// Returns the matching message type or throws on unknown payloads.
     public static func fromJson(_ json: JsonMap) throws -> A2uiMessage {
         if let surfaceUpdate = json["surfaceUpdate"] as? JsonMap {
             return SurfaceUpdate.fromJson(surfaceUpdate)
@@ -27,6 +29,8 @@ public enum A2uiMessageFactory {
         throw GenUiError.unknownMessageType(json)
     }
 
+    /// Builds a JSON schema for A2UI messages.
+    /// Includes the current catalog's surface update schema.
     public static func a2uiMessageSchema(catalog: Catalog) -> Schema {
         S.object(
             title: "A2UI Message Schema",
@@ -41,19 +45,21 @@ public enum A2uiMessageFactory {
     }
 }
 
-/// Message that updates or adds UI components.
-/// Carries a surface id and a list of Component definitions.
+/// Message that updates or adds UI components to a surface.
+/// Carries the surface id plus the component payloads.
 public struct SurfaceUpdate: A2uiMessage {
     public let surfaceId: String
     public let components: [Component]
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a surface update for a set of components.
+    /// Provide the surface id and component list to apply.
     public init(surfaceId: String, components: [Component]) {
         self.surfaceId = surfaceId
         self.components = components
     }
 
+    /// Parses a surface update from a JSON map.
+    /// Uses the `components` array to build `Component` values.
     public static func fromJson(_ json: JsonMap) -> SurfaceUpdate {
         let surfaceId = json[surfaceIdKey] as? String ?? ""
         let components: [Component] = (json["components"] as? [Any] ?? []).compactMap { item -> Component? in
@@ -63,7 +69,7 @@ public struct SurfaceUpdate: A2uiMessage {
         return SurfaceUpdate(surfaceId: surfaceId, components: components)
     }
 
-    /// Serializes the value to a JSON-compatible dictionary.
+    /// Serializes the update to a JSON map.
     /// The output is suitable for transport or logging.
     public func toJson() -> JsonMap {
         [
@@ -73,21 +79,23 @@ public struct SurfaceUpdate: A2uiMessage {
     }
 }
 
-/// Message that mutates the data model.
-/// Targets a surface id and optional data path.
+/// Message that mutates the surface data model.
+/// Targets a surface id and optional path in the data tree.
 public struct DataModelUpdate: A2uiMessage {
     public let surfaceId: String
     public let path: String?
     public let contents: Any
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a data model update payload.
+    /// Provide the surface id, optional path, and contents.
     public init(surfaceId: String, path: String? = nil, contents: Any) {
         self.surfaceId = surfaceId
         self.path = path
         self.contents = contents
     }
 
+    /// Parses a data model update from a JSON map.
+    /// Reads `surfaceId`, `path`, and `contents` fields.
     public static func fromJson(_ json: JsonMap) -> DataModelUpdate {
         DataModelUpdate(
             surfaceId: json[surfaceIdKey] as? String ?? "",
@@ -97,16 +105,16 @@ public struct DataModelUpdate: A2uiMessage {
     }
 }
 
-/// Message that starts rendering a surface.
-/// Defines the root component id and optional catalog/styles.
+/// Message that begins rendering a surface.
+/// Defines the root component id and optional styles/catalog id.
 public struct BeginRendering: A2uiMessage {
     public let surfaceId: String
     public let root: String
     public let styles: JsonMap?
     public let catalogId: String?
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a begin-rendering message.
+    /// Provide the root component id and optional styles/catalog id.
     public init(surfaceId: String, root: String, styles: JsonMap? = nil, catalogId: String? = nil) {
         self.surfaceId = surfaceId
         self.root = root
@@ -114,6 +122,8 @@ public struct BeginRendering: A2uiMessage {
         self.catalogId = catalogId
     }
 
+    /// Parses a begin-rendering message from a JSON map.
+    /// Reads surface, root, styles, and catalog fields.
     public static func fromJson(_ json: JsonMap) -> BeginRendering {
         BeginRendering(
             surfaceId: json[surfaceIdKey] as? String ?? "",
@@ -124,24 +134,26 @@ public struct BeginRendering: A2uiMessage {
     }
 }
 
-/// Message that removes a surface.
-/// Identified by the surface id to delete.
+/// Message that deletes an existing surface.
+/// Identified by the surface id to remove.
 public struct SurfaceDeletion: A2uiMessage {
     public let surfaceId: String
 
-    /// Creates a new instance.
-    /// Configures the instance with the provided parameters.
+    /// Creates a surface deletion message.
+    /// Provide the surface id to remove.
     public init(surfaceId: String) {
         self.surfaceId = surfaceId
     }
 
+    /// Parses a surface deletion from a JSON map.
+    /// Reads the surface id from the payload.
     public static func fromJson(_ json: JsonMap) -> SurfaceDeletion {
         SurfaceDeletion(surfaceId: json[surfaceIdKey] as? String ?? "")
     }
 }
 
-/// Gen ui error API.
-/// Provides the public API for this declaration.
+/// Errors raised while decoding A2UI payloads.
+/// Used by `A2uiMessageFactory` when no message type matches.
 public enum GenUiError: Error {
     case unknownMessageType(JsonMap)
 }

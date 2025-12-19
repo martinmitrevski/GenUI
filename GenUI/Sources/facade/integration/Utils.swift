@@ -5,7 +5,7 @@
 import Foundation
 
 /// Builds the system prompt for UI tool usage.
-/// Injects tool names and surface id guidance.
+/// Injects tool names and surface id guidance for LLMs.
 public func genUiTechPrompt(_ toolNames: [String]) -> String {
     let toolDescription: String
     if toolNames.count > 1 {
@@ -28,7 +28,7 @@ Ensure one of the generated components has an id of 'root'.
 }
 
 /// Builds a tool declaration for a catalog.
-/// Uses the surfaceUpdate schema as parameters.
+/// Uses the catalog-driven surface update schema as parameters.
 public func catalogToFunctionDeclaration(
     _ catalog: Catalog,
     toolName: String,
@@ -42,7 +42,7 @@ public func catalogToFunctionDeclaration(
 }
 
 /// Converts a tool call into A2UI messages.
-/// Returns the messages and target surface id.
+/// Returns the messages plus the target surface id.
 public func parseToolCall(_ toolCall: ToolCall, toolName: String) -> ParsedToolCall {
     precondition(toolCall.name == toolName)
 
@@ -56,7 +56,7 @@ public func parseToolCall(_ toolCall: ToolCall, toolName: String) -> ParsedToolC
     return ParsedToolCall(messages: messages, surfaceId: surfaceId)
 }
 
-/// Wraps catalog example JSON into a ToolCall.
+/// Wraps catalog example JSON into a `ToolCall`.
 /// Used for testing or prompt examples.
 public func catalogExampleToToolCall(
     _ example: JsonMap,
