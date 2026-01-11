@@ -18,7 +18,7 @@ public final class GenUiConversation {
     public var onError: ((ContentGeneratorError) -> Void)?
 
     private var cancellables: Set<AnyCancellable> = []
-    private let conversationNotifier = ValueNotifier<[ChatMessage]>([])
+    private let conversationNotifier = ValueNotifier<[Message]>([])
 
     /// Creates a conversation facade with event callbacks.
     /// Optionally disables auto-handling of submit events.
@@ -85,7 +85,7 @@ public final class GenUiConversation {
         a2uiMessageProcessor
     }
 
-    public var conversation: ValueNotifier<[ChatMessage]> {
+    public var conversation: ValueNotifier<[Message]> {
         conversationNotifier
     }
 
@@ -101,7 +101,7 @@ public final class GenUiConversation {
 
     /// Sends a message to the content generator.
     /// Automatically passes history and client capabilities.
-    public func sendRequest(_ message: ChatMessage) async {
+    public func sendRequest(_ message: Message) async {
         let history = conversationNotifier.value
         if !(message is UserUiInteractionMessage) {
             conversationNotifier.value = history + [message]

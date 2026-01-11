@@ -30,8 +30,8 @@ public protocol ContentGenerator {
     /// Sends a message to the generator for processing.
     /// Provide optional history and client capabilities to shape the response.
     func sendRequest(
-        _ message: ChatMessage,
-        history: [ChatMessage]?,
+        _ message: Message,
+        history: [Message]?,
         clientCapabilities: A2UiClientCapabilities?
     ) async
 

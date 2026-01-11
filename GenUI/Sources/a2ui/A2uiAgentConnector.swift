@@ -67,7 +67,7 @@ public final class A2uiAgentConnector {
     /// Sends a chat message to the agent and streams responses.
     /// Returns the final text response when available.
     public func connectAndSend(
-        _ chatMessage: ChatMessage,
+        _ chatMessage: Message,
         clientCapabilities: A2UiClientCapabilities? = nil
     ) async -> String? {
         let parts: [MessagePart]

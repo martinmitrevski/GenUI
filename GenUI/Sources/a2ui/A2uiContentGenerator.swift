@@ -54,8 +54,8 @@ public final class A2uiContentGenerator: ContentGenerator {
     /// Sends a message to the A2UI agent.
     /// Forwards optional client capabilities to the server.
     public func sendRequest(
-        _ message: ChatMessage,
-        history: [ChatMessage]?,
+        _ message: Message,
+        history: [Message]?,
         clientCapabilities: A2UiClientCapabilities?
     ) async {
         isProcessingNotifier.value = true

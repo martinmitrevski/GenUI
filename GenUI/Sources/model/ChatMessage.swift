@@ -110,11 +110,11 @@ public struct ThinkingPart: MessagePart {
 
 /// Marker protocol for chat history messages.
 /// Implemented by user, AI, and tool result message types.
-public protocol ChatMessage {}
+public protocol Message {}
 
 /// Internal message for the chat log.
 /// Use for system notes that are not user-visible.
-public struct InternalMessage: ChatMessage {
+public struct InternalMessage: Message {
     public let text: String
 
     /// Creates an internal message with text content.
@@ -126,7 +126,7 @@ public struct InternalMessage: ChatMessage {
 
 /// User-authored message composed of message parts.
 /// Provides a flattened text representation for convenience.
-public struct UserMessage: ChatMessage {
+public struct UserMessage: Message {
     public let parts: [MessagePart]
     public let text: String
 
@@ -146,7 +146,7 @@ public struct UserMessage: ChatMessage {
 
 /// Message representing UI interactions.
 /// Used to forward UI events back to the agent.
-public struct UserUiInteractionMessage: ChatMessage {
+public struct UserUiInteractionMessage: Message {
     public let parts: [MessagePart]
     public let text: String
 
@@ -166,7 +166,7 @@ public struct UserUiInteractionMessage: ChatMessage {
 
 /// AI-authored message composed of message parts.
 /// Stores parts and a flattened text representation.
-public struct AiTextMessage: ChatMessage {
+public struct AiTextMessage: Message {
     public let parts: [MessagePart]
     public let text: String
 
@@ -186,7 +186,7 @@ public struct AiTextMessage: ChatMessage {
 
 /// Message carrying tool results for the model.
 /// Bundles one or more tool result parts.
-public struct ToolResponseMessage: ChatMessage {
+public struct ToolResponseMessage: Message {
     public let results: [ToolResultPart]
 
     /// Creates a tool response message.
@@ -198,7 +198,7 @@ public struct ToolResponseMessage: ChatMessage {
 
 /// AI-authored UI message.
 /// Contains a `UiDefinition` and surface id metadata.
-public struct AiUiMessage: ChatMessage {
+public struct AiUiMessage: Message {
     public let definition: UiDefinition
     public let uiKey: String
     public let surfaceId: String

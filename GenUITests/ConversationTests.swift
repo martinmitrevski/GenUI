@@ -17,7 +17,7 @@ final class TestContentGenerator: ContentGenerator {
     var errorStream: AnyPublisher<ContentGeneratorError, Never> { errorSubject.eraseToAnyPublisher() }
     var isProcessing: ValueNotifier<Bool> { processing }
 
-    func sendRequest(_ message: ChatMessage, history: [ChatMessage]?, clientCapabilities: A2UiClientCapabilities?) async {
+    func sendRequest(_ message: Message, history: [Message]?, clientCapabilities: A2UiClientCapabilities?) async {
     }
 
     func dispose() {
