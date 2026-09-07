@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		84EB7ADB2EF5647300986E0F /* GenUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84EB7AD12EF5647200986E0F /* GenUI.framework */; };
 		84EB7B762EF588ED00986E0F /* GenUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84EB7AD12EF5647200986E0F /* GenUI.framework */; };
+		84EB7C012EF5990000986E0F /* GenUI.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 84EB7AD12EF5647200986E0F /* GenUI.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -19,7 +20,28 @@
 			remoteGlobalIDString = 84EB7AD02EF5647200986E0F;
 			remoteInfo = GenUI;
 		};
+		84EB7C042EF5990000986E0F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 84EB7AC82EF5647200986E0F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 84EB7AD02EF5647200986E0F;
+			remoteInfo = GenUI;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		84EB7C022EF5990000986E0F /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				84EB7C012EF5990000986E0F /* GenUI.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		84EB7AD12EF5647200986E0F /* GenUI.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = GenUI.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -166,10 +188,12 @@
 				84EB7AE92EF5649900986E0F /* Sources */,
 				84EB7AEA2EF5649900986E0F /* Frameworks */,
 				84EB7AEB2EF5649900986E0F /* Resources */,
+				84EB7C022EF5990000986E0F /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				84EB7C032EF5990000986E0F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				84EB7AEE2EF5649900986E0F /* GenUISample */,
@@ -276,6 +300,11 @@
 			isa = PBXTargetDependency;
 			target = 84EB7AD02EF5647200986E0F /* GenUI */;
 			targetProxy = 84EB7ADC2EF5647300986E0F /* PBXContainerItemProxy */;
+		};
+		84EB7C032EF5990000986E0F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 84EB7AD02EF5647200986E0F /* GenUI */;
+			targetProxy = 84EB7C042EF5990000986E0F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -529,6 +558,7 @@
 				DEVELOPMENT_TEAM = UAM22JDBB2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Configuration/GenUISample-Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -562,6 +592,7 @@
 				DEVELOPMENT_TEAM = UAM22JDBB2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Configuration/GenUISample-Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

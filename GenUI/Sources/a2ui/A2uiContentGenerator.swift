@@ -2,76 +2,65 @@
 // Copyright © 2025 Martin Mitrevski. All rights reserved.
 //
 
-import Foundation
 import Combine
+import Foundation
 
-/// Content generator backed by an A2UI agent connector.
-/// Streams UI messages and forwards text responses to subscribers.
+/// A ``ContentGenerator`` backed by an A2UI agent reached over A2A.
+///
+/// The generator owns an ``A2uiAgentConnector`` and republishes its streams on
+/// the main queue, so surface state is always mutated where SwiftUI reads it.
 public final class A2uiContentGenerator: ContentGenerator {
+    /// The connector used for transport.
     public let connector: A2uiAgentConnector
 
-    private let textResponseController = PassthroughSubject<String, Never>()
-    private let errorResponseController = PassthroughSubject<ContentGeneratorError, Never>()
-    private let isProcessingNotifier = ValueNotifier<Bool>(false)
+    private let processingNotifier = ValueNotifier(false)
+    private let errorSubject = PassthroughSubject<ContentGeneratorError, Never>()
     private var cancellables: Set<AnyCancellable> = []
 
-    /// Creates a generator for a given A2UI server URL.
-    /// Optionally inject a preconfigured connector.
+    /// Creates a generator for an agent URL.
+    /// Inject a connector to test without a network connection.
     public init(serverUrl: URL, connector: A2uiAgentConnector? = nil) {
         self.connector = connector ?? A2uiAgentConnector(url: serverUrl)
-
-        self.connector.errorStream
+        self.connector.errors
             .sink { [weak self] error in
-                self?.errorResponseController.send(ContentGeneratorError(error))
+                self?.errorSubject.send(ContentGeneratorError(error, context: "A2UI agent"))
             }
             .store(in: &cancellables)
     }
 
-    public var a2uiMessageStream: AnyPublisher<A2uiMessage, Never> {
-        connector.stream
+    /// A2UI messages streamed by the agent, delivered on the main queue.
+    public var messages: AnyPublisher<A2uiMessage, Never> {
+        connector.messages.receive(on: DispatchQueue.main).eraseToAnyPublisher()
     }
 
-    public var textResponseStream: AnyPublisher<String, Never> {
-        textResponseController.eraseToAnyPublisher()
+    /// Text responses streamed by the agent, delivered on the main queue.
+    public var textResponses: AnyPublisher<String, Never> {
+        connector.textResponses.receive(on: DispatchQueue.main).eraseToAnyPublisher()
     }
 
-    public var errorStream: AnyPublisher<ContentGeneratorError, Never> {
-        errorResponseController.eraseToAnyPublisher()
+    /// Failures encountered while talking to the agent.
+    public var errors: AnyPublisher<ContentGeneratorError, Never> {
+        errorSubject.receive(on: DispatchQueue.main).eraseToAnyPublisher()
     }
 
+    /// Whether a request is currently in flight.
     public var isProcessing: ValueNotifier<Bool> {
-        isProcessingNotifier
+        processingNotifier
     }
 
-    /// Releases resources and closes streams.
-    /// Call when the generator is no longer needed.
+    /// Sends a request to the agent and waits for the stream to finish.
+    /// Skips empty requests so no-op events do not wake the agent.
+    public func send(_ request: GenerationRequest) async {
+        guard !request.isEmpty else { return }
+
+        await MainActor.run { processingNotifier.value = true }
+        await connector.send(request)
+        await MainActor.run { processingNotifier.value = false }
+    }
+
+    /// Releases the generator's resources.
     public func dispose() {
-        textResponseController.send(completion: .finished)
-        connector.dispose()
         cancellables.removeAll()
-    }
-
-    /// Sends a message to the A2UI agent.
-    /// Forwards optional client capabilities to the server.
-    public func sendRequest(
-        _ message: Message,
-        history: [Message]?,
-        clientCapabilities: A2UiClientCapabilities?
-    ) async {
-        isProcessingNotifier.value = true
-        defer { isProcessingNotifier.value = false }
-
-        if let history, !history.isEmpty {
-            genUiLogger.warning("A2uiContentGenerator is stateful and ignores history.")
-        }
-
-        let responseText = await connector.connectAndSend(
-            message,
-            clientCapabilities: clientCapabilities
-        )
-
-        if let responseText, !responseText.isEmpty {
-            textResponseController.send(responseText)
-        }
+        connector.dispose()
     }
 }

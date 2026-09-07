@@ -93,3 +93,25 @@ public func configureGenUiLogging(
     }
     return genUiLogger
 }
+
+/// Formats errors for logs and for the messages sent back to agents.
+public enum A2uiErrorFormatter {
+    /// Returns the most useful description available for an error.
+    ///
+    /// A2UI's own error types carry curated messages; other errors fall back to
+    /// their localized description.
+    public static func describe(_ error: Error) -> String {
+        switch error {
+        case let error as A2uiFunctionError:
+            return error.description
+        case let error as A2uiDecodingError:
+            return error.description
+        case let error as A2AClientError:
+            return error.description
+        case let error as ContentGeneratorError:
+            return error.localizedDescription
+        default:
+            return error.localizedDescription
+        }
+    }
+}

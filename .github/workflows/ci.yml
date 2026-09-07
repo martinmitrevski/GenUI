@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Swift package (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build --build-tests
+      - name: Test
+        run: swift test
+
+  ios:
+    name: iOS (simulator)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the framework
+        run: |
+          xcodebuild test \
+            -project GenUI.xcodeproj \
+            -scheme GenUI \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            | xcpretty || exit ${PIPESTATUS[0]}
+      - name: Build the sample app
+        run: |
+          xcodebuild build \
+            -project GenUI.xcodeproj \
+            -scheme GenUISample \
+            -destination 'generic/platform=iOS Simulator' \
+            | xcpretty || exit ${PIPESTATUS[0]}
