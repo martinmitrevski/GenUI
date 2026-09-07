@@ -2,76 +2,80 @@
 // Copyright © 2025 Martin Mitrevski. All rights reserved.
 //
 
-import SwiftUI
 import Combine
+import SwiftUI
 
-/// SwiftUI view that renders catalog examples.
-/// Useful for development and visual validation of widgets.
+/// Renders every example declared by a catalog's components.
+///
+/// This is a development tool: it exercises each component with a small,
+/// self-contained A2UI message stream, which makes it easy to check rendering
+/// and interaction without an agent.
 public struct DebugCatalogView: View {
-    @StateObject private var viewModel: DebugCatalogViewModel
+    @StateObject private var model: DebugCatalogModel
+
+    /// The height applied to each example, when set.
     public let itemHeight: CGFloat?
 
-    /// Creates a debug view for catalog examples.
-    /// Provide a catalog and optional submit handler.
+    /// Creates a gallery for a catalog.
+    /// Pass `onAction` to observe the actions the examples dispatch.
     public init(
         catalog: Catalog,
-        onSubmit: ((UserUiInteractionMessage) -> Void)? = nil,
+        onAction: ((RendererAction) -> Void)? = nil,
         itemHeight: CGFloat? = nil
     ) {
-        self._viewModel = StateObject(wrappedValue: DebugCatalogViewModel(catalog: catalog, onSubmit: onSubmit))
+        self._model = StateObject(wrappedValue: DebugCatalogModel(catalog: catalog, onAction: onAction))
         self.itemHeight = itemHeight
     }
 
     public var body: some View {
-        List(viewModel.surfaceIds, id: \.self) { surfaceId in
-            VStack(alignment: .center, spacing: 8) {
-                Text(surfaceId)
-                    .font(.headline)
-                GenUiSurface(host: viewModel.messageProcessor, surfaceId: surfaceId)
-                    .frame(height: itemHeight)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 24) {
+                ForEach(model.surfaceIds, id: \.self) { surfaceId in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(surfaceId)
+                            .font(.headline)
+                        GenUiSurface(host: model.processor, surfaceId: surfaceId)
+                            .frame(height: itemHeight)
+                    }
+                }
             }
-            .padding(8)
+            .padding()
         }
     }
 }
 
-final class DebugCatalogViewModel: ObservableObject {
-    let messageProcessor: A2uiMessageProcessor
-    @Published var surfaceIds: [String] = []
+/// Loads catalog examples into a message processor for the debug gallery.
+final class DebugCatalogModel: ObservableObject {
+    let processor: A2uiMessageProcessor
+
+    @Published private(set) var surfaceIds: [String] = []
 
     private var cancellable: AnyCancellable?
 
-    init(catalog: Catalog, onSubmit: ((UserUiInteractionMessage) -> Void)?) {
-        self.messageProcessor = A2uiMessageProcessor(catalogs: [catalog])
-
-        if let onSubmit {
-            cancellable = messageProcessor.onSubmit.sink(receiveValue: onSubmit)
+    init(catalog: Catalog, onAction: ((RendererAction) -> Void)?) {
+        processor = A2uiMessageProcessor(catalogs: [catalog], defaultCatalogId: catalog.catalogId)
+        if let onAction {
+            cancellable = processor.actions.sink(receiveValue: onAction)
         }
 
-        for item in catalog.items {
-            for index in item.exampleData.indices {
-                let exampleBuilder = item.exampleData[index]
-                let indexPart = item.exampleData.count > 1 ? "-\(index)" : ""
-                let surfaceId = "\(item.name)\(indexPart)"
-
-                let exampleJsonString = exampleBuilder()
-                guard let data = exampleJsonString.data(using: .utf8),
-                      let json = try? JSONSerialization.jsonObject(with: data, options: []),
-                      let list = json as? [Any] else {
+        for name in catalog.components.keys.sorted() {
+            guard let definition = catalog.component(name) else { continue }
+            for (index, example) in definition.examples.enumerated() {
+                let suffix = definition.examples.count > 1 ? "-\(index + 1)" : ""
+                let surfaceId = "\(name)\(suffix)"
+                guard let components = Json.decode(example) as? JsonArray else {
+                    genUiLogger.severe("Example \(surfaceId) is not a JSON array of components.")
                     continue
                 }
-
-                let components = list.compactMap { entry -> Component? in
-                    guard let map = entry as? JsonMap else { return nil }
-                    return Component.fromJson(map)
-                }
-
-                guard let rootComponent = components.first(where: { $0.id == "root" }) else {
-                    continue
-                }
-
-                messageProcessor.handleMessage(SurfaceUpdate(surfaceId: surfaceId, components: components))
-                messageProcessor.handleMessage(BeginRendering(surfaceId: surfaceId, root: rootComponent.id))
+                processor.handle(
+                    .createSurface(
+                        CreateSurfaceMessage(
+                            surfaceId: surfaceId,
+                            catalogId: catalog.catalogId,
+                            components: A2uiMessageDecoder.components(from: components)
+                        )
+                    )
+                )
                 surfaceIds.append(surfaceId)
             }
         }
@@ -79,6 +83,5 @@ final class DebugCatalogViewModel: ObservableObject {
 
     deinit {
         cancellable?.cancel()
-        messageProcessor.dispose()
     }
 }

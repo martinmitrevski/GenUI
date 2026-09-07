@@ -1,0 +1,253 @@
+[
+  {
+    "id": "golden-dragon",
+    "name": "Golden Dragon",
+    "cuisine": "Chinese • Dim Sum",
+    "city": "New York",
+    "neighborhood": "Chinatown",
+    "rating": 4.7,
+    "reviewCount": 1284,
+    "priceRange": "$$",
+    "distanceMiles": 0.6,
+    "prepMinutes": 25,
+    "imageUrl": "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&h=320&fit=crop",
+    "menu": [
+      {
+        "id": "soup-dumplings",
+        "name": "Pork soup dumplings",
+        "description": "Eight pieces, ginger vinegar",
+        "price": 12.5,
+        "imageUrl": "https://images.unsplash.com/photo-1496116218417-1a781b1c416c?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "char-siu-bao",
+        "name": "Char siu bao",
+        "description": "Steamed barbecue pork buns",
+        "price": 9.0,
+        "imageUrl": "https://images.unsplash.com/photo-1563245372-f21724e3856d?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "mapo-tofu",
+        "name": "Mapo tofu",
+        "description": "Sichuan peppercorn, silken tofu",
+        "price": 16.0,
+        "imageUrl": "https://images.unsplash.com/photo-1584278858536-52532423b9ea?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "chow-fun",
+        "name": "Beef chow fun",
+        "description": "Wide rice noodles, scallion",
+        "price": 18.5,
+        "imageUrl": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "jasmine-tea",
+        "name": "Jasmine tea",
+        "description": "Pot, serves two",
+        "price": 4.0,
+        "imageUrl": "https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=240&h=240&fit=crop"
+      }
+    ]
+  },
+  {
+    "id": "hunan-house",
+    "name": "Hunan House",
+    "cuisine": "Chinese • Sichuan",
+    "city": "New York",
+    "neighborhood": "Flushing",
+    "rating": 4.6,
+    "reviewCount": 872,
+    "priceRange": "$$",
+    "distanceMiles": 3.4,
+    "prepMinutes": 35,
+    "imageUrl": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=600&h=320&fit=crop",
+    "menu": [
+      {
+        "id": "cumin-lamb",
+        "name": "Cumin lamb",
+        "description": "Hand-pulled noodles, chili",
+        "price": 21.0,
+        "imageUrl": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "dry-pot",
+        "name": "Dry pot cauliflower",
+        "description": "Smoked bacon, garlic",
+        "price": 17.5,
+        "imageUrl": "https://images.unsplash.com/photo-1568584711075-3d021a7c3ca3?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "wontons",
+        "name": "Chili oil wontons",
+        "description": "Ten pieces, sesame",
+        "price": 11.0,
+        "imageUrl": "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "cucumber",
+        "name": "Smashed cucumber",
+        "description": "Black vinegar, garlic",
+        "price": 8.0,
+        "imageUrl": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=240&h=240&fit=crop"
+      }
+    ]
+  },
+  {
+    "id": "shanghai-club",
+    "name": "Shanghai Supper Club",
+    "cuisine": "Chinese • Modern",
+    "city": "New York",
+    "neighborhood": "Lower East Side",
+    "rating": 4.8,
+    "reviewCount": 2140,
+    "priceRange": "$$$",
+    "distanceMiles": 1.2,
+    "prepMinutes": 40,
+    "imageUrl": "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=600&h=320&fit=crop",
+    "menu": [
+      {
+        "id": "peking-duck",
+        "name": "Peking duck",
+        "description": "Half bird, pancakes, hoisin",
+        "price": 48.0,
+        "imageUrl": "https://images.unsplash.com/photo-1518492104633-130d0cc84637?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "lions-head",
+        "name": "Lion's head meatballs",
+        "description": "Napa cabbage, clear broth",
+        "price": 24.0,
+        "imageUrl": "https://images.unsplash.com/photo-1526318896980-cf78c088247c?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "scallion-pancake",
+        "name": "Scallion pancake",
+        "description": "Flaky, soy dipping sauce",
+        "price": 10.0,
+        "imageUrl": "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "bok-choy",
+        "name": "Garlic bok choy",
+        "description": "Wok-fired",
+        "price": 12.0,
+        "imageUrl": "https://images.unsplash.com/photo-1607532941433-304659e8198a?w=240&h=240&fit=crop"
+      }
+    ]
+  },
+  {
+    "id": "trattoria-marino",
+    "name": "Trattoria Marino",
+    "cuisine": "Italian • Pasta",
+    "city": "New York",
+    "neighborhood": "West Village",
+    "rating": 4.5,
+    "reviewCount": 954,
+    "priceRange": "$$$",
+    "distanceMiles": 2.1,
+    "prepMinutes": 30,
+    "imageUrl": "https://images.unsplash.com/photo-1481931098730-318b6f776db0?w=600&h=320&fit=crop",
+    "menu": [
+      {
+        "id": "cacio-e-pepe",
+        "name": "Cacio e pepe",
+        "description": "Tonnarelli, pecorino, black pepper",
+        "price": 22.0,
+        "imageUrl": "https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "margherita",
+        "name": "Margherita pizza",
+        "description": "San Marzano, fior di latte",
+        "price": 19.0,
+        "imageUrl": "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "polpette",
+        "name": "Polpette",
+        "description": "Veal meatballs, sugo",
+        "price": 14.0,
+        "imageUrl": "https://images.unsplash.com/photo-1529042410759-befb1204b468?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "tiramisu",
+        "name": "Tiramisu",
+        "description": "Espresso, mascarpone",
+        "price": 11.0,
+        "imageUrl": "https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=240&h=240&fit=crop"
+      }
+    ]
+  },
+  {
+    "id": "kaiseki-nine",
+    "name": "Kaiseki Nine",
+    "cuisine": "Japanese • Sushi",
+    "city": "San Francisco",
+    "neighborhood": "Hayes Valley",
+    "rating": 4.9,
+    "reviewCount": 611,
+    "priceRange": "$$$$",
+    "distanceMiles": 0.9,
+    "prepMinutes": 45,
+    "imageUrl": "https://images.unsplash.com/photo-1553621042-f6e147245754?w=600&h=320&fit=crop",
+    "menu": [
+      {
+        "id": "omakase",
+        "name": "Omakase, nine courses",
+        "description": "Chef's selection",
+        "price": 145.0,
+        "imageUrl": "https://images.unsplash.com/photo-1607301405390-d831c242f59b?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "nigiri-set",
+        "name": "Nigiri set",
+        "description": "Ten pieces",
+        "price": 62.0,
+        "imageUrl": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "miso",
+        "name": "Miso soup",
+        "description": "Wakame, tofu",
+        "price": 7.0,
+        "imageUrl": "https://images.unsplash.com/photo-1617093727343-374698b1b08d?w=240&h=240&fit=crop"
+      }
+    ]
+  },
+  {
+    "id": "el-farolito",
+    "name": "El Farolito",
+    "cuisine": "Mexican • Tacos",
+    "city": "San Francisco",
+    "neighborhood": "Mission",
+    "rating": 4.4,
+    "reviewCount": 3312,
+    "priceRange": "$",
+    "distanceMiles": 1.8,
+    "prepMinutes": 15,
+    "imageUrl": "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&h=320&fit=crop",
+    "menu": [
+      {
+        "id": "al-pastor",
+        "name": "Al pastor tacos",
+        "description": "Three, pineapple, onion",
+        "price": 9.75,
+        "imageUrl": "https://images.unsplash.com/photo-1552332386-f8dd00dc2f85?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "super-burrito",
+        "name": "Super burrito",
+        "description": "Carne asada, guacamole",
+        "price": 13.25,
+        "imageUrl": "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=240&h=240&fit=crop"
+      },
+      {
+        "id": "horchata",
+        "name": "Horchata",
+        "description": "Large",
+        "price": 4.5,
+        "imageUrl": "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=240&h=240&fit=crop"
+      }
+    ]
+  }
+]

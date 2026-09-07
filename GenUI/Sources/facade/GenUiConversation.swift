@@ -2,172 +2,228 @@
 // Copyright © 2025 Martin Mitrevski. All rights reserved.
 //
 
-import Foundation
 import Combine
+import Foundation
 
-/// High-level facade that wires a generator to a UI host.
-/// Manages conversation history, surface updates, and callbacks.
+/// Wires an A2UI agent to a renderer and keeps the conversation together.
+///
+/// The conversation owns the two halves of an A2UI client: a
+/// ``ContentGenerator`` that talks to the agent, and an
+/// ``A2uiMessageProcessor`` that turns the agent's messages into rendered
+/// surfaces. It also closes the loop in the other direction, forwarding user
+/// actions, function calls and renderer errors back to the agent with the
+/// metadata the protocol requires.
+///
+/// ```swift
+/// let conversation = GenUiConversation(
+///     contentGenerator: A2uiContentGenerator(serverUrl: url),
+///     processor: A2uiMessageProcessor(catalogs: [BasicCatalog.catalog])
+/// )
+/// await conversation.send(UserMessage.text("Order a pizza"))
+/// ```
+///
+/// All members must be used from the main thread.
 public final class GenUiConversation {
+    /// The generator used to talk to the agent.
     public let contentGenerator: ContentGenerator
-    public let a2uiMessageProcessor: A2uiMessageProcessor
 
+    /// The processor that owns renderer state.
+    public let processor: A2uiMessageProcessor
+
+    /// Called when the agent creates a surface.
     public var onSurfaceAdded: ((SurfaceAdded) -> Void)?
+
+    /// Called when a surface's components or data change.
     public var onSurfaceUpdated: ((SurfaceUpdated) -> Void)?
-    public var onSurfaceDeleted: ((SurfaceRemoved) -> Void)?
+
+    /// Called when a surface is deleted.
+    public var onSurfaceRemoved: ((SurfaceRemoved) -> Void)?
+
+    /// Called for every text response from the agent.
     public var onTextResponse: ((String) -> Void)?
+
+    /// Called for every failure while talking to the agent.
     public var onError: ((ContentGeneratorError) -> Void)?
 
-    private var cancellables: Set<AnyCancellable> = []
-    private let conversationNotifier = ValueNotifier<[Message]>([])
+    /// Called for every user action, before it is sent to the agent.
+    public var onAction: ((RendererAction) -> Void)?
 
-    /// Creates a conversation facade with event callbacks.
-    /// Optionally disables auto-handling of submit events.
+    private let conversationNotifier = ValueNotifier<[Message]>([])
+    private let forwardsRendererMessages: Bool
+    private var pendingRendererMessages: [RendererMessage] = []
+    private var isFlushScheduled = false
+    private var cancellables: Set<AnyCancellable> = []
+
+    /// Creates a conversation.
+    ///
+    /// Set `forwardsRendererMessages` to `false` to take over delivery of user
+    /// actions, for example to clear surfaces before sending the next request.
     public init(
         contentGenerator: ContentGenerator,
-        a2uiMessageProcessor: A2uiMessageProcessor,
-        handleSubmitEvents: Bool = true,
-        onSurfaceAdded: ((SurfaceAdded) -> Void)? = nil,
-        onSurfaceUpdated: ((SurfaceUpdated) -> Void)? = nil,
-        onSurfaceDeleted: ((SurfaceRemoved) -> Void)? = nil,
-        onTextResponse: ((String) -> Void)? = nil,
-        onError: ((ContentGeneratorError) -> Void)? = nil
+        processor: A2uiMessageProcessor,
+        forwardsRendererMessages: Bool = true
     ) {
         self.contentGenerator = contentGenerator
-        self.a2uiMessageProcessor = a2uiMessageProcessor
-        self.onSurfaceAdded = onSurfaceAdded
-        self.onSurfaceUpdated = onSurfaceUpdated
-        self.onSurfaceDeleted = onSurfaceDeleted
-        self.onTextResponse = onTextResponse
-        self.onError = onError
+        self.processor = processor
+        self.forwardsRendererMessages = forwardsRendererMessages
 
-        contentGenerator.a2uiMessageStream
+        contentGenerator.messages
             .sink { [weak self] message in
-                self?.a2uiMessageProcessor.handleMessage(message)
+                self?.processor.handle(message)
             }
             .store(in: &cancellables)
 
-        if handleSubmitEvents {
-            a2uiMessageProcessor.onSubmit
-                .sink { [weak self] message in
-                    Task { await self?.sendRequest(message) }
-                }
-                .store(in: &cancellables)
-        }
-
-        a2uiMessageProcessor.surfaceUpdates
-            .sink { [weak self] update in
-                self?.handleSurfaceUpdate(update)
-            }
-            .store(in: &cancellables)
-
-        contentGenerator.textResponseStream
+        contentGenerator.textResponses
             .sink { [weak self] text in
-                self?.handleTextResponse(text)
+                self?.append(AiTextMessage.text(text))
+                self?.onTextResponse?(text)
             }
             .store(in: &cancellables)
 
-        contentGenerator.errorStream
+        contentGenerator.errors
             .sink { [weak self] error in
-                self?.handleError(error)
+                self?.onError?(error)
+            }
+            .store(in: &cancellables)
+
+        processor.surfaceUpdates
+            .sink { [weak self] update in
+                self?.handle(update)
+            }
+            .store(in: &cancellables)
+
+        processor.rendererMessages
+            .sink { [weak self] message in
+                self?.enqueue(message)
             }
             .store(in: &cancellables)
     }
 
-    /// Releases subscriptions and underlying resources.
-    /// Call when the conversation is no longer needed.
-    public func dispose() {
-        cancellables.removeAll()
-        contentGenerator.dispose()
-        a2uiMessageProcessor.dispose()
-    }
-
+    /// The host that ``GenUiSurface`` views bind to.
     public var host: GenUiHost {
-        a2uiMessageProcessor
+        processor
     }
 
+    /// The conversation so far, including rendered surfaces.
     public var conversation: ValueNotifier<[Message]> {
         conversationNotifier
     }
 
+    /// Whether a request is currently in flight.
     public var isProcessing: ValueNotifier<Bool> {
         contentGenerator.isProcessing
     }
 
-    /// Returns a notifier for the given surface.
-    /// Convenience access through the conversation facade.
-    public func surface(_ surfaceId: String) -> ValueNotifier<UiDefinition?> {
-        a2uiMessageProcessor.getSurfaceNotifier(surfaceId)
+    /// The renderer capabilities advertised to the agent.
+    ///
+    /// Override this to declare inline catalogs when the agent accepts them.
+    public var capabilities: RendererCapabilities {
+        RendererCapabilities(supportedCatalogIds: processor.catalogs.supportedCatalogIds)
     }
 
-    /// Sends a message to the content generator.
-    /// Automatically passes history and client capabilities.
-    public func sendRequest(_ message: Message) async {
-        let history = conversationNotifier.value
-        if !(message is UserUiInteractionMessage) {
-            conversationNotifier.value = history + [message]
-        }
-
-        let supportedCatalogIds = a2uiMessageProcessor.catalogs
-            .compactMap { $0.catalogId }
-        let clientCapabilities = A2UiClientCapabilities(supportedCatalogIds: supportedCatalogIds)
-
-        await contentGenerator.sendRequest(
-            message,
-            history: history,
-            clientCapabilities: clientCapabilities
-        )
+    /// Sends a user message to the agent.
+    /// Pending renderer events are delivered with the same request.
+    public func send(_ message: UserMessage) async {
+        append(message)
+        await send(userMessage: message, rendererMessages: takePendingMessages())
     }
 
-    /// Clears all rendered surfaces and associated data models.
-    /// Use this before issuing a new request when the UI should reset.
+    /// Sends a plain text prompt to the agent.
+    public func send(text: String) async {
+        await send(UserMessage.text(text))
+    }
+
+    /// Sends renderer-to-agent events without a user message.
+    /// Use this when taking over event delivery.
+    public func send(rendererMessages: [RendererMessage]) async {
+        guard !rendererMessages.isEmpty else { return }
+        await send(userMessage: nil, rendererMessages: rendererMessages)
+    }
+
+    /// Removes every rendered surface and its data.
+    /// Call before a new request when the UI should start clean.
     public func clearSurfaces() {
-        a2uiMessageProcessor.clearSurfaces(emitUpdates: true)
+        processor.clearSurfaces()
     }
 
-    private func handleSurfaceUpdate(_ update: GenUiUpdate) {
+    /// Releases the conversation's resources.
+    public func dispose() {
+        cancellables.removeAll()
+        contentGenerator.dispose()
+        processor.dispose()
+    }
+
+    // MARK: - Private
+
+    private func send(userMessage: UserMessage?, rendererMessages: [RendererMessage]) async {
+        let request = GenerationRequest(
+            userMessage: userMessage,
+            rendererMessages: rendererMessages,
+            history: conversationNotifier.value,
+            capabilities: capabilities,
+            dataModel: processor.synchronizedDataModel()
+        )
+        await contentGenerator.send(request)
+    }
+
+    private func enqueue(_ message: RendererMessage) {
+        if case let .action(action) = message {
+            onAction?(action)
+            if let text = action.userMessage {
+                append(UiInteractionMessage(rendererMessages: [message], text: text))
+            }
+        }
+        guard forwardsRendererMessages else { return }
+
+        pendingRendererMessages.append(message)
+        guard !isFlushScheduled else { return }
+        isFlushScheduled = true
+
+        // Coalesce everything produced in the same run loop turn into one
+        // request, so a burst of events does not wake the agent repeatedly.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isFlushScheduled = false
+            let messages = self.takePendingMessages()
+            guard !messages.isEmpty else { return }
+            Task { await self.send(userMessage: nil, rendererMessages: messages) }
+        }
+    }
+
+    private func takePendingMessages() -> [RendererMessage] {
+        defer { pendingRendererMessages.removeAll() }
+        return pendingRendererMessages
+    }
+
+    private func handle(_ update: GenUiUpdate) {
         switch update {
         case let added as SurfaceAdded:
-            conversationNotifier.value = conversationNotifier.value + [
-                AiUiMessage(definition: added.definition, surfaceId: added.surfaceId)
-            ]
+            append(AiUiMessage(definition: added.definition))
             onSurfaceAdded?(added)
         case let updated as SurfaceUpdated:
-            var newConversation = conversationNotifier.value
-            if let index = newConversation.lastIndex(where: { message in
-                if let uiMessage = message as? AiUiMessage {
-                    return uiMessage.surfaceId == updated.surfaceId
-                }
-                return false
-            }) {
-                newConversation[index] = AiUiMessage(definition: updated.definition, surfaceId: updated.surfaceId)
-            } else {
-                newConversation.append(AiUiMessage(definition: updated.definition, surfaceId: updated.surfaceId))
-            }
-            conversationNotifier.value = newConversation
+            replaceSurfaceMessage(with: updated.definition)
             onSurfaceUpdated?(updated)
         case let removed as SurfaceRemoved:
-            var newConversation = conversationNotifier.value
-            newConversation.removeAll { message in
-                if let uiMessage = message as? AiUiMessage {
-                    return uiMessage.surfaceId == removed.surfaceId
-                }
-                return false
+            conversationNotifier.value = conversationNotifier.value.filter { message in
+                (message as? AiUiMessage)?.surfaceId != removed.surfaceId
             }
-            conversationNotifier.value = newConversation
-            onSurfaceDeleted?(removed)
+            onSurfaceRemoved?(removed)
         default:
             break
         }
     }
 
-    private func handleTextResponse(_ text: String) {
-        conversationNotifier.value = conversationNotifier.value + [AiTextMessage.text(text)]
-        onTextResponse?(text)
+    private func append(_ message: Message) {
+        conversationNotifier.value = conversationNotifier.value + [message]
     }
 
-    private func handleError(_ error: ContentGeneratorError) {
-        let errorResponse = AiTextMessage.text("An error occurred: \(error.error)")
-        conversationNotifier.value = conversationNotifier.value + [errorResponse]
-        onError?(error)
+    private func replaceSurfaceMessage(with definition: UiDefinition) {
+        var messages = conversationNotifier.value
+        if let index = messages.lastIndex(where: { ($0 as? AiUiMessage)?.surfaceId == definition.surfaceId }) {
+            messages[index] = AiUiMessage(definition: definition)
+        } else {
+            messages.append(AiUiMessage(definition: definition))
+        }
+        conversationNotifier.value = messages
     }
 }

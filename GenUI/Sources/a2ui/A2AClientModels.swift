@@ -44,11 +44,22 @@ public struct A2AAgentCapabilities {
     public let streaming: Bool?
     public let pushNotifications: Bool?
 
+    /// The protocol extensions advertised by the agent.
+    ///
+    /// A2UI agents declare their supported catalogs here, under the extension
+    /// URI `https://a2ui.org/a2a-extension/a2ui/v1.0`.
+    public let extensions: [A2AAgentExtension]
+
     /// Creates a capabilities container with optional flags.
     /// Use nil when the agent card omits a capability.
-    public init(streaming: Bool? = nil, pushNotifications: Bool? = nil) {
+    public init(
+        streaming: Bool? = nil,
+        pushNotifications: Bool? = nil,
+        extensions: [A2AAgentExtension] = []
+    ) {
         self.streaming = streaming
         self.pushNotifications = pushNotifications
+        self.extensions = extensions
     }
 
     /// Builds capabilities from a JSON map.
@@ -56,7 +67,11 @@ public struct A2AAgentCapabilities {
     public static func fromJson(_ json: JsonMap) -> A2AAgentCapabilities {
         A2AAgentCapabilities(
             streaming: json["streaming"] as? Bool,
-            pushNotifications: json["pushNotifications"] as? Bool
+            pushNotifications: json["pushNotifications"] as? Bool,
+            extensions: (Json.array(json["extensions"]) ?? []).compactMap { entry in
+                guard let map = Json.map(entry) else { return nil }
+                return A2AAgentExtension.fromJson(map)
+            }
         )
     }
 
@@ -66,6 +81,51 @@ public struct A2AAgentCapabilities {
         var json: JsonMap = [:]
         if let streaming { json["streaming"] = streaming }
         if let pushNotifications { json["pushNotifications"] = pushNotifications }
+        if !extensions.isEmpty { json["extensions"] = extensions.map { $0.toJson() } }
+        return json
+    }
+}
+
+/// A protocol extension advertised in an A2A agent card.
+public struct A2AAgentExtension {
+    /// The canonical URI of the extension.
+    public let uri: String
+
+    /// A human-readable description of the extension.
+    public let description: String?
+
+    /// Whether the agent requires the extension to be activated.
+    public let required: Bool
+
+    /// Extension-specific parameters.
+    public let params: JsonMap?
+
+    /// Creates an extension declaration.
+    /// A2UI agents put their capabilities in `params`.
+    public init(uri: String, description: String? = nil, required: Bool = false, params: JsonMap? = nil) {
+        self.uri = uri
+        self.description = description
+        self.required = required
+        self.params = params
+    }
+
+    /// Parses an extension declaration.
+    /// Returns nil when the URI is missing.
+    public static func fromJson(_ json: JsonMap) -> A2AAgentExtension? {
+        guard let uri = json["uri"] as? String else { return nil }
+        return A2AAgentExtension(
+            uri: uri,
+            description: json["description"] as? String,
+            required: Json.bool(json["required"]) ?? false,
+            params: Json.map(json["params"])
+        )
+    }
+
+    /// Serializes the declaration to a JSON map.
+    public func toJson() -> JsonMap {
+        var json: JsonMap = ["uri": uri, "required": required]
+        if let description { json["description"] = description }
+        if let params { json["params"] = params }
         return json
     }
 }
@@ -93,6 +153,19 @@ public struct A2AAgentCard {
         self.version = version
         self.url = url
         self.capabilities = capabilities
+    }
+
+    /// The A2UI capabilities the agent advertises, if any.
+    ///
+    /// Renderers use this to decide whether to attach
+    /// `a2uiRendererCapabilities` metadata and inline catalogs.
+    public var a2uiCapabilities: AgentCapabilities? {
+        guard let params = capabilities?.extensions
+            .first(where: { $0.uri == A2uiProtocol.a2aExtensionUri })?
+            .params else {
+            return nil
+        }
+        return AgentCapabilities.fromJson(params)
     }
 
     /// Parses an agent card response.
@@ -177,17 +250,31 @@ public struct A2ATextPart: A2APart {
 }
 
 /// Message part containing structured data.
-/// Encoded with a `"type": "data"` discriminator.
+///
+/// A2UI carries its messages in data parts whose `data` field is an array of
+/// A2UI messages, so the payload is stored as an untyped JSON value.
 public struct A2ADataPart: A2APart {
-    public var data: JsonMap
+    /// The JSON payload of the part.
+    public var data: Any
 
+    /// Part metadata, such as the A2UI MIME type.
     public var metadata: JsonMap?
 
-    /// Creates a data part with an optional JSON payload.
-    /// Include metadata such as a mime type when needed.
-    public init(data: JsonMap = [:], metadata: JsonMap? = nil) {
+    /// Creates a data part with an arbitrary JSON payload.
+    /// Include the A2UI MIME type in `metadata` for A2UI payloads.
+    public init(data: Any = JsonMap(), metadata: JsonMap? = nil) {
         self.data = data
         self.metadata = metadata
+    }
+
+    /// The payload as a JSON object, when it is one.
+    public var dataMap: JsonMap? {
+        Json.map(data)
+    }
+
+    /// The payload as a JSON array, when it is one.
+    public var dataArray: JsonArray? {
+        Json.array(data)
     }
 
     /// Serializes the part to a JSON map.
@@ -196,9 +283,6 @@ public struct A2ADataPart: A2APart {
         var json: JsonMap = ["kind": "data", "type": "data", "data": data]
         if let metadata {
             json["metadata"] = metadata
-            if let mimeType = metadata["mimeType"] as? String {
-                json["mimeType"] = mimeType
-            }
         }
         return json
     }
@@ -207,8 +291,7 @@ public struct A2ADataPart: A2APart {
     /// Returns nil if the payload is not a data part.
     public static func fromJson(_ json: JsonMap) -> A2ADataPart? {
         let kind = (json["type"] as? String) ?? (json["kind"] as? String)
-        guard kind == "data" else { return nil }
-        guard let data = json["data"] as? JsonMap else { return nil }
+        guard kind == "data", let data = json["data"] else { return nil }
         var metadata = json["metadata"] as? JsonMap
         if let mimeType = json["mimeType"] as? String {
             if metadata == nil { metadata = [:] }
@@ -604,12 +687,37 @@ public struct A2ATaskStatusUpdateEvent: A2AResult {
 
 /// Errors thrown by A2A client implementations.
 /// Covers validation, HTTP, and parsing failures.
-public enum A2AClientError: Error {
+public enum A2AClientError: Error, CustomStringConvertible {
+    /// The agent card was missing or did not contain an endpoint URL.
     case invalidAgentCard
+    /// The agent does not support streaming responses.
     case streamingNotSupported
+    /// The response was not a valid A2A payload.
     case invalidResponse
+    /// The response content type was not the expected one.
     case invalidContentType
+    /// The response id did not match the request id.
     case responseIdMismatch
+    /// The agent returned a JSON-RPC error.
+    case serverError(code: Int, message: String)
+
+    /// A human-readable description of the failure.
+    public var description: String {
+        switch self {
+        case .invalidAgentCard:
+            return "The agent card is missing or does not contain an endpoint URL."
+        case .streamingNotSupported:
+            return "The agent does not support streaming responses."
+        case .invalidResponse:
+            return "The agent returned an invalid response."
+        case .invalidContentType:
+            return "The agent returned an unexpected content type."
+        case .responseIdMismatch:
+            return "The agent returned a response for a different request."
+        case let .serverError(code, message):
+            return "The agent returned error \(code): \(message)"
+        }
+    }
 }
 
 /// URLSession-based A2A client implementation.

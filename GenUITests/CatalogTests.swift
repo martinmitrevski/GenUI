@@ -2,43 +2,273 @@
 // Copyright © 2025 Martin Mitrevski. All rights reserved.
 //
 
+import Foundation
 import SwiftUI
 import Testing
 @testable import GenUI
 
-struct CatalogTests {
-    @Test func catalogBuildsWidget() {
-        let item = CatalogItem(
-            name: "Text",
-            dataSchema: S.object(),
-            widgetBuilder: { _ in AnyView(Text("Hello")) }
-        )
-        let catalog = Catalog([item], catalogId: "catalog")
-        let context = CatalogItemContext(
-            data: ["Text": [:]],
-            id: "root",
-            buildChild: { _, _ in AnyView(EmptyView()) },
-            dispatchEvent: { _ in },
-            buildContext: GenUiBuildContext(),
-            dataContext: DataContext(DataModel(), "/"),
-            getComponent: { _ in nil },
-            surfaceId: "surface"
-        )
-
-        _ = catalog.buildWidget(context)
-        #expect(catalog.catalogId == "catalog")
+@Suite("Basic catalog")
+struct BasicCatalogTests {
+    @Test("Every component of the v1.0 basic catalog is implemented")
+    func components() {
+        let expected = [
+            "AudioPlayer", "Button", "Card", "CheckBox", "ChoicePicker", "Column",
+            "DateTimeInput", "Divider", "Icon", "Image", "List", "Modal", "Row",
+            "Slider", "Tabs", "Text", "TextField", "Video"
+        ]
+        #expect(BasicCatalog.catalog.components.keys.sorted() == expected)
     }
 
-    @Test func catalogDefinitionIncludesComponents() {
-        let item = CatalogItem(
-            name: "Text",
-            dataSchema: S.object(),
-            widgetBuilder: { _ in AnyView(EmptyView()) }
-        )
-        let catalog = Catalog([item])
-        let definition = catalog.definition as? ObjectSchema
-        let components = definition?.properties["components"] as? ObjectSchema
+    @Test("Every function of the v1.0 basic catalog is implemented")
+    func functions() {
+        let expected = [
+            "and", "email", "formatCurrency", "formatDate", "formatNumber", "formatString",
+            "length", "not", "numeric", "openUrl", "or", "pluralize", "regex", "required"
+        ]
+        #expect(BasicCatalog.catalog.functions.keys.sorted() == expected)
+    }
 
-        #expect(components?.properties["Text"] != nil)
+    @Test("The catalog id matches the specification")
+    func catalogId() {
+        #expect(BasicCatalog.catalogId == "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json")
+        #expect(BasicCatalog.catalog.catalogId == BasicCatalog.catalogId)
+    }
+
+    @Test("The reserved Surface component type is not defined")
+    func reservedComponentName() {
+        #expect(BasicCatalog.catalog.component(A2uiProtocol.surfaceComponentType) == nil)
+    }
+
+    @Test("Every component declares its required properties")
+    func requiredProperties() throws {
+        let expectations = [
+            "Text": ["text"],
+            "Image": ["url"],
+            "Icon": ["name"],
+            "Row": ["children"],
+            "Column": ["children"],
+            "Card": ["child"],
+            "Button": ["child", "action"],
+            "TextField": ["label"],
+            "CheckBox": ["label", "value"],
+            "ChoicePicker": ["options", "value"],
+            "Slider": ["value", "max"],
+            "DateTimeInput": ["value"],
+            "Modal": ["trigger", "content"],
+            "Tabs": ["tabs"]
+        ]
+        for (name, required) in expectations {
+            let definition = try #require(BasicCatalog.catalog.component(name))
+            #expect(Set(definition.requiredProperties) == Set(required), "\(name) required properties")
+        }
+    }
+
+    @Test("Every component and function name is a valid catalog identifier")
+    func naming() {
+        // The specification requires UAX #31 identifiers for catalog entities.
+        let pattern = "^[A-Za-z_][A-Za-z0-9_]*$"
+        for name in BasicCatalog.catalog.components.keys {
+            #expect(name.range(of: pattern, options: .regularExpression) != nil, "component \(name)")
+        }
+        for name in BasicCatalog.catalog.functions.keys {
+            #expect(name.range(of: pattern, options: .regularExpression) != nil, "function \(name)")
+            #expect(!name.hasPrefix("@"), "catalogs must not define system functions")
+        }
+    }
+
+    @Test("Component examples are valid component payloads with a root")
+    func examples() throws {
+        for definition in BasicCatalog.catalog.components.values {
+            for example in definition.examples {
+                let array = try #require(Json.decode(example) as? JsonArray, "\(definition.name) example is not an array")
+                let components = A2uiMessageDecoder.components(from: array)
+                #expect(components.count == array.count, "\(definition.name) example has invalid components")
+                #expect(components.contains { $0.id == A2uiProtocol.rootComponentId }, "\(definition.name) example has no root")
+            }
+        }
+    }
+}
+
+@Suite("Catalog schema generation")
+struct CatalogSchemaTests {
+    @Test("The catalog document follows the v1.0 layout")
+    func document() throws {
+        let schema = BasicCatalog.catalog.toJsonSchema()
+
+        #expect(schema["catalogId"] as? String == BasicCatalog.catalogId)
+        #expect(schema["$id"] as? String == BasicCatalog.catalogId)
+        #expect(schema["protocolVersion"] as? String == "1.0")
+        #expect(schema["instructions"] != nil)
+
+        let allowedKeys: Set<String> = [
+            "$schema", "$id", "protocolVersion", "title", "description",
+            "catalogId", "instructions", "components", "functions", "$defs"
+        ]
+        #expect(Set(schema.keys).isSubset(of: allowedKeys))
+
+        let defs = try #require(Json.map(schema["$defs"]))
+        #expect(Set(defs.keys) == ["anyComponent", "anyFunction"])
+        let anyComponent = try #require(Json.map(defs["anyComponent"]))
+        #expect(Json.map(anyComponent["discriminator"])?["propertyName"] as? String == "component")
+        #expect(Json.array(anyComponent["oneOf"])?.count == BasicCatalog.catalog.components.count)
+    }
+
+    @Test("Component schemas declare the component discriminator")
+    func componentDiscriminator() throws {
+        let schema = BasicCatalog.catalog.toJsonSchema()
+        let components = try #require(Json.map(schema["components"]))
+
+        for (name, value) in components {
+            let componentSchema = try #require(Json.map(value))
+            let properties = try #require(Json.map(componentSchema["properties"]))
+            let discriminator = try #require(Json.map(properties["component"]))
+            #expect(discriminator["const"] as? String == name)
+            #expect(Json.stringArray(componentSchema["required"])?.contains("component") == true)
+        }
+    }
+
+    @Test("Function schemas declare their call name, return type and callers")
+    func functionSchemas() throws {
+        let schema = BasicCatalog.catalog.toJsonSchema()
+        let functions = try #require(Json.map(schema["functions"]))
+
+        for (name, value) in functions {
+            let functionSchema = try #require(Json.map(value))
+            let properties = try #require(Json.map(functionSchema["properties"]))
+            #expect(Json.map(properties["call"])?["const"] as? String == name)
+            #expect(functionSchema["returnType"] as? String != nil)
+            #expect(functionSchema["allowedCallers"] as? String != nil)
+        }
+
+        let openUrl = try #require(Json.map(functions["openUrl"]))
+        #expect(openUrl["requiresUserActivation"] as? Bool == true)
+        #expect(openUrl["allowedCallers"] as? String == "rendererOnly")
+    }
+
+    @Test("Composition constraints are exported")
+    func compositionConstraints() throws {
+        let catalog = Catalog(
+            catalogId: "app:catalog",
+            components: [
+                ComponentDefinition(name: "Menu", allowedChildren: ["MenuItem"]) { _ in AnyView(EmptyViewShim()) },
+                ComponentDefinition(name: "MenuItem", allowedParents: ["Menu"]) { _ in AnyView(EmptyViewShim()) }
+            ]
+        )
+        let components = try #require(Json.map(catalog.toJsonSchema()["components"]))
+
+        #expect(Json.stringArray(Json.map(components["Menu"])?["allowedChildren"]) == ["MenuItem"])
+        #expect(Json.stringArray(Json.map(components["MenuItem"])?["allowedParents"]) == ["Menu"])
+    }
+}
+
+@Suite("Catalog registry")
+struct CatalogRegistryTests
+{
+    private var appCatalog: Catalog {
+        Catalog(
+            catalogId: "app:catalog",
+            components: [ComponentDefinition(name: "Hero") { _ in AnyView(EmptyViewShim()) }],
+            functions: [
+                FunctionDefinition(name: "appOnly", description: "", returnType: .string) { _ in "x" }
+            ]
+        )
+    }
+
+    @Test("A component level catalog id wins over the surface default")
+    func componentLevelCatalog() {
+        let registry = CatalogRegistry(catalogs: [BasicCatalog.catalog, appCatalog])
+        let component = Component(id: "hero", type: "Hero", catalogId: "app:catalog")
+
+        #expect(registry.component(component, surfaceCatalogId: BasicCatalog.catalogId)?.name == "Hero")
+    }
+
+    @Test("Components fall back to the surface default catalog")
+    func surfaceDefaultCatalog() {
+        let registry = CatalogRegistry(catalogs: [BasicCatalog.catalog, appCatalog])
+        let component = Component(id: "title", type: "Text")
+
+        #expect(registry.component(component, surfaceCatalogId: BasicCatalog.catalogId)?.name == "Text")
+    }
+
+    @Test("There is no fallback to other supported catalogs")
+    func noImplicitFallback() {
+        let registry = CatalogRegistry(catalogs: [BasicCatalog.catalog, appCatalog])
+        let component = Component(id: "title", type: "Text")
+
+        #expect(registry.component(component, surfaceCatalogId: nil) == nil)
+        #expect(registry.component(component, surfaceCatalogId: "app:catalog") == nil)
+        #expect(registry.component(Component(id: "x", type: "Text", catalogId: "nope:catalog"), surfaceCatalogId: BasicCatalog.catalogId) == nil)
+    }
+
+    @Test("A renderer configured default keeps agents that omit the catalog working")
+    func rendererDefault() {
+        let registry = CatalogRegistry(catalogs: [BasicCatalog.catalog], defaultCatalogId: BasicCatalog.catalogId)
+        #expect(registry.component(Component(id: "title", type: "Text"), surfaceCatalogId: nil)?.name == "Text")
+    }
+
+    @Test("Agent-initiated calls can name any supported catalog")
+    func functionLookup() {
+        let registry = CatalogRegistry(catalogs: [BasicCatalog.catalog, appCatalog])
+
+        #expect(registry.function(named: "appOnly", catalogId: "app:catalog") != nil)
+        #expect(registry.function(named: "appOnly", catalogId: BasicCatalog.catalogId) == nil)
+        #expect(registry.function(named: "appOnly", catalogId: nil) != nil)
+        #expect(registry.supportedCatalogIds == ["app:catalog", BasicCatalog.catalogId].sorted())
+    }
+
+    @Test("Catalogs can be extended and trimmed")
+    func customization() {
+        let extended = BasicCatalog.catalog.adding(
+            components: [ComponentDefinition(name: "Hero") { _ in AnyView(EmptyViewShim()) }],
+            catalogId: "app:catalog"
+        )
+        #expect(extended.catalogId == "app:catalog")
+        #expect(extended.component("Hero") != nil)
+        #expect(extended.component("Text") != nil)
+
+        let trimmed = extended.removing(components: ["Video", "AudioPlayer"])
+        #expect(trimmed.component("Video") == nil)
+        #expect(trimmed.components.count == extended.components.count - 2)
+    }
+}
+
+@Suite("Composition validation")
+struct CompositionValidatorTests {
+    private let child = ComponentDefinition(name: "MenuItem", allowedParents: ["Menu"]) { _ in AnyView(EmptyViewShim()) }
+    private let container = ComponentDefinition(name: "Menu", allowedChildren: ["MenuItem"]) { _ in AnyView(EmptyViewShim()) }
+    private let text = ComponentDefinition(name: "Text") { _ in AnyView(EmptyViewShim()) }
+
+    @Test("An allowed nesting produces no error")
+    func allowed() {
+        #expect(CompositionValidator.validate(child: child, childId: "i", parent: container, surfaceId: "s") == nil)
+    }
+
+    @Test("A component under a forbidden parent reports UNALLOWED_PARENT")
+    func unallowedParent() throws {
+        let error = try #require(
+            CompositionValidator.validate(child: child, childId: "i", parent: text, surfaceId: "s")
+        )
+        #expect(error.code == RendererError.Code.unallowedParent)
+        #expect(error.path == "/components/i")
+        #expect(error.surfaceId == "s")
+    }
+
+    @Test("A forbidden child in a container reports UNALLOWED_CHILD")
+    func unallowedChild() throws {
+        let error = try #require(
+            CompositionValidator.validate(child: text, childId: "t", parent: container, surfaceId: "s")
+        )
+        #expect(error.code == RendererError.Code.unallowedChild)
+    }
+
+    @Test("The surface root is validated against the reserved Surface container")
+    func surfaceParent() throws {
+        let rootOnly = ComponentDefinition(name: "AppLayout", allowedParents: ["Surface"]) { _ in AnyView(EmptyViewShim()) }
+
+        #expect(CompositionValidator.validate(child: rootOnly, childId: "root", parent: nil, surfaceId: "s") == nil)
+        let error = try #require(
+            CompositionValidator.validate(child: rootOnly, childId: "x", parent: text, surfaceId: "s")
+        )
+        #expect(error.code == RendererError.Code.unallowedParent)
     }
 }

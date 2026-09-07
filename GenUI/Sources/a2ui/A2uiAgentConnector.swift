@@ -2,302 +2,263 @@
 // Copyright © 2025 Martin Mitrevski. All rights reserved.
 //
 
-import Foundation
 import Combine
+import Foundation
 
-/// Basic metadata describing an A2UI agent.
-/// Includes name, description, and version strings.
-public struct AgentCard {
-    public let name: String
-    public let description: String
-    public let version: String
-
-    /// Creates an agent card payload.
-    /// Use this to surface agent metadata in UIs.
-    public init(name: String, description: String, version: String) {
-        self.name = name
-        self.description = description
-        self.version = version
-    }
-}
-
-/// Connects to an A2UI agent over A2A and streams responses.
-/// Translates A2A messages into `A2uiMessage` updates.
+/// Connects a renderer to an A2UI agent over the A2A protocol.
+///
+/// The connector implements the A2UI A2A extension v1.0:
+///
+/// * the extension URI `https://a2ui.org/a2a-extension/a2ui/v1.0` is activated
+///   through the `X-A2A-Extensions` header,
+/// * renderer capabilities and synchronized data models travel in message
+///   metadata,
+/// * A2UI messages travel in data parts whose MIME type is
+///   `application/a2ui+json` and whose payload is an array of messages.
 public final class A2uiAgentConnector {
-    private let a2uiMimeTypes = [
-        "application/json+a2ui",
-        "application/json+a2aui"
-    ]
+    /// The base URL of the agent.
     public let url: URL
 
-    private let controller = PassthroughSubject<A2uiMessage, Never>()
-    private let errorController = PassthroughSubject<Error, Never>()
+    /// The A2A client used for transport.
+    public let client: A2AClientProtocol
 
-    public var client: A2AClientProtocol
-    public var taskId: String?
-    private var contextIdValue: String?
+    /// The task the agent created for this conversation, if any.
+    public private(set) var taskId: String?
 
-    public var contextId: String? {
-        contextIdValue
-    }
+    /// The context id shared by every message of this conversation.
+    public private(set) var contextId: String?
 
-    /// Creates a connector for the given server URL.
-    /// Optionally inject a custom A2A client and context id.
+    private let messagesSubject = PassthroughSubject<A2uiMessage, Never>()
+    private let textSubject = PassthroughSubject<String, Never>()
+    private let errorSubject = PassthroughSubject<Error, Never>()
+
+    /// Creates a connector for an agent URL.
+    /// Inject a client to test without a network connection.
     public init(url: URL, client: A2AClientProtocol? = nil, contextId: String? = nil) {
         self.url = url
         self.client = client ?? A2AClient(baseUrl: url.absoluteString)
-        self.contextIdValue = contextId
+        self.contextId = contextId
     }
 
-    public var stream: AnyPublisher<A2uiMessage, Never> {
-        controller.eraseToAnyPublisher()
+    /// A2UI messages streamed by the agent.
+    public var messages: AnyPublisher<A2uiMessage, Never> {
+        messagesSubject.eraseToAnyPublisher()
     }
 
-    public var errorStream: AnyPublisher<Error, Never> {
-        errorController.eraseToAnyPublisher()
+    /// Plain text responses streamed by the agent.
+    public var textResponses: AnyPublisher<String, Never> {
+        textSubject.eraseToAnyPublisher()
     }
 
-    /// Fetches the agent card from the A2A client.
-    /// Returns the parsed name, description, and version.
-    public func getAgentCard() async throws -> AgentCard {
-        let card = try await client.getAgentCard()
-        return AgentCard(name: card.name, description: card.description, version: card.version)
+    /// Transport and decoding failures.
+    public var errors: AnyPublisher<Error, Never> {
+        errorSubject.eraseToAnyPublisher()
     }
 
-    /// Sends a chat message to the agent and streams responses.
-    /// Returns the final text response when available.
-    public func connectAndSend(
-        _ chatMessage: Message,
-        clientCapabilities: A2UiClientCapabilities? = nil
-    ) async -> String? {
-        let parts: [MessagePart]
-        if let userMessage = chatMessage as? UserMessage {
-            parts = userMessage.parts
-        } else if let userMessage = chatMessage as? UserUiInteractionMessage {
-            parts = userMessage.parts
-        } else {
-            parts = []
-        }
+    /// Fetches the agent card, including its A2UI capabilities.
+    /// Use it to check which catalogs the agent can generate.
+    public func agentCard() async throws -> A2AAgentCard {
+        try await client.getAgentCard()
+    }
 
-        var message = A2AMessage()
-        message.messageId = UUID().uuidString
-        message.role = "user"
-        if let interaction = chatMessage as? UserUiInteractionMessage,
-           let interactionData = parseJsonMap(interaction.text) {
-            message.parts = [
-                A2ADataPart(data: interactionData, metadata: ["mimeType": a2uiMimeTypes[0]])
-            ]
-        } else {
-            message.parts = parts.map { part in
-                switch part {
-                case let text as TextPart:
-                    return A2ATextPart(text: text.text)
-                case let data as DataPart:
-                    return A2ADataPart(data: data.data ?? [:])
-                case let image as ImagePart:
-                    if let url = image.url {
-                        let file = A2AFileWithUri(uri: url.absoluteString, mimeType: image.mimeType)
-                        return A2AFilePart(file: file)
-                    }
-                    let base64Data: String
-                    if let bytes = image.bytes {
-                        base64Data = bytes.base64EncodedString()
-                    } else if let base64 = image.base64 {
-                        base64Data = base64
-                    } else {
-                        genUiLogger.warning("ImagePart has no data (url, bytes, or base64)")
-                        return A2ATextPart(text: "[Empty Image]")
-                    }
-                    let file = A2AFileWithBytes(bytes: base64Data, mimeType: image.mimeType)
-                    return A2AFilePart(file: file)
-                default:
-                    genUiLogger.warning("Unknown message part type: \(type(of: part))")
-                    return A2ATextPart(text: "[Unknown Part]")
+    /// Sends a request and streams the agent's response.
+    ///
+    /// A2UI messages are published on ``messages`` as they arrive so the UI can
+    /// render progressively. The final text response, if any, is returned and
+    /// also published on ``textResponses``.
+    @discardableResult
+    public func send(_ request: GenerationRequest) async -> String? {
+        let payload = A2AMessageSendParams(
+            message: makeMessage(for: request),
+            extensions: [A2uiProtocol.a2aExtensionUri]
+        )
+
+        genUiLogger.info("Sending message/stream to \(url.absoluteString)")
+        genUiLogger.finer("Payload: \(Json.encodeToString(payload.toJson(), pretty: true) ?? "<unencodable>")")
+
+        var responseText: String?
+        do {
+            for try await event in client.sendMessageStream(payload) {
+                if let text = handle(event: event) {
+                    responseText = text
                 }
             }
+        } catch {
+            genUiLogger.severe("A2A stream failed: \(error)")
+            errorSubject.send(error)
+        }
+
+        if let responseText, !responseText.isEmpty {
+            textSubject.send(responseText)
+        }
+        return responseText
+    }
+
+    /// Closes the connector's streams.
+    /// Call when the conversation ends.
+    public func dispose() {
+        messagesSubject.send(completion: .finished)
+        textSubject.send(completion: .finished)
+        errorSubject.send(completion: .finished)
+    }
+
+    // MARK: - Outgoing messages
+
+    private func makeMessage(for request: GenerationRequest) -> A2AMessage {
+        var message = A2AMessage()
+        message.role = "user"
+        message.parts = parts(for: request)
+
+        var metadata: JsonMap = [:]
+        if let capabilities = request.capabilities {
+            metadata[A2uiProtocol.rendererCapabilitiesKey] = capabilities.toJson()
+        }
+        if let dataModel = request.dataModel, !dataModel.isEmpty {
+            metadata[A2uiProtocol.rendererDataModelKey] = dataModel.toJson()
+        }
+        if !metadata.isEmpty {
+            message.metadata = metadata
         }
 
         if let taskId {
             message.referenceTaskIds = [taskId]
         }
-        if let contextIdValue {
-            message.contextId = contextIdValue
-        }
-        if let clientCapabilities {
-            message.metadata = [
-                "a2uiClientCapabilities": clientCapabilities.toJson()
-            ]
-        }
-
-        var payload = A2AMessageSendParams(message: message)
-        payload.extensions = ["https://a2ui.org/a2a-extension/a2ui/v0.8"]
-
-        genUiLogger.info("--- OUTGOING REQUEST ---")
-        genUiLogger.info("URL: \(url.absoluteString)")
-        genUiLogger.info("Method: message/stream")
-        if let pretty = prettyJson(payload.toJson()) {
-            genUiLogger.info("Payload: \(pretty)")
-        }
-        genUiLogger.info("----------------------")
-
-        let events = client.sendMessageStream(payload)
-
-        var responseText: String?
-        var finalResponse: A2AMessage?
-
-        do {
-            for try await event in events {
-                if let pretty = prettyJson(event.toJson()) {
-                    genUiLogger.info("Received A2A event:\n\(pretty)")
-                }
-
-                if event.isError, let errorResponse = event as? A2AJSONRPCErrorResponseSSM {
-                    let code = errorResponse.error?.rpcErrorCode
-                    let errorMessage = "A2A Error: \(String(describing: code))"
-                    genUiLogger.severe(errorMessage)
-                    errorController.send(A2AClientError.invalidResponse)
-                    continue
-                }
-
-                if let response = event as? A2ASendStreamMessageSuccessResponse {
-                    let result = response.result
-                    if let task = result as? A2ATask {
-                        taskId = task.id
-                        contextIdValue = task.contextId
-                    }
-
-                    let message: A2AMessage?
-                    if let task = result as? A2ATask {
-                        message = task.status?.message
-                    } else if let messageResult = result as? A2AMessage {
-                        message = messageResult
-                    } else if let update = result as? A2ATaskStatusUpdateEvent {
-                        message = update.status?.message
-                    } else {
-                        message = nil
-                    }
-
-                    if let message {
-                        finalResponse = message
-                        if let pretty = prettyJson(message.toJson()) {
-                            genUiLogger.info("Received A2A Message:\n\(pretty)")
-                        }
-                        for part in message.parts {
-                            if let dataPart = part as? A2ADataPart, shouldProcessA2uiPart(dataPart) {
-                                processA2uiMessages(dataPart.data)
-                            }
-                        }
-                    }
-                }
-            }
-        } catch {
-            genUiLogger.severe("Error parsing A2A response: \(error)")
-            errorController.send(error)
-        }
-
-        if let finalResponse {
-            for part in finalResponse.parts {
-                if let textPart = part as? A2ATextPart {
-                    responseText = textPart.text
-                }
-            }
-        }
-
-        return responseText
+        message.contextId = contextId
+        return message
     }
 
-    /// Sends a user interaction event to the agent.
-    /// Requires an active task id.
-    public func sendEvent(_ event: JsonMap) async {
-        guard let taskId else {
-            genUiLogger.severe("Cannot send event, no active task ID.")
-            return
+    private func parts(for request: GenerationRequest) -> [A2APart] {
+        var parts: [A2APart] = []
+
+        if !request.rendererMessages.isEmpty {
+            parts.append(
+                A2ADataPart(
+                    data: request.rendererMessages.map { $0.toJson() },
+                    metadata: ["mimeType": A2uiProtocol.mimeType]
+                )
+            )
         }
 
-        let clientEvent: JsonMap = [
-            "actionName": event["action"] ?? "",
-            "sourceComponentId": event["sourceComponentId"] ?? "",
-            "timestamp": ISO8601DateFormatter().string(from: Date()),
-            "resolvedContext": event["context"] ?? ""
-        ]
-
-        genUiLogger.finest("Sending client event: \(clientEvent)")
-
-        let dataPart = A2ADataPart(data: ["a2uiEvent": clientEvent])
-        var message = A2AMessage()
-        message.role = "user"
-        message.parts = [dataPart]
-        message.contextId = contextIdValue
-        message.referenceTaskIds = [taskId]
-
-        var payload = A2AMessageSendParams(message: message)
-        payload.extensions = ["https://a2ui.org/a2a-extension/a2ui/v0.8"]
-
-        do {
-            try await client.sendMessage(payload)
-            genUiLogger.fine("Successfully sent event for task \(taskId) (context \(String(describing: contextIdValue)))")
-        } catch {
-            genUiLogger.severe("Error sending event: \(error)")
-            errorController.send(error)
-        }
-    }
-
-    /// Releases resources and closes streams.
-    /// Call when the connector is no longer needed.
-    public func dispose() {
-        controller.send(completion: .finished)
-        errorController.send(completion: .finished)
-    }
-
-    private func processA2uiMessages(_ data: JsonMap) {
-        if let pretty = prettyJson(data) {
-            genUiLogger.finer("Processing a2ui messages from data part:\n\(pretty)")
-        }
-        if data.keys.contains("surfaceUpdate") ||
-            data.keys.contains("dataModelUpdate") ||
-            data.keys.contains("beginRendering") ||
-            data.keys.contains("deleteSurface") {
-            do {
-                let message = try A2uiMessageFactory.fromJson(data)
-                controller.send(message)
-            } catch {
-                errorController.send(error)
-            }
-            return
-        }
-        if let list = data["messages"] as? [Any] {
-            for item in list {
-                if let map = item as? JsonMap {
-                    processA2uiMessages(map)
+        for part in request.userMessage?.parts ?? [] {
+            switch part {
+            case let text as TextPart:
+                parts.append(A2ATextPart(text: text.text))
+            case let data as DataPart:
+                parts.append(A2ADataPart(data: data.data ?? JsonMap()))
+            case let image as ImagePart:
+                if let url = image.url {
+                    parts.append(A2AFilePart(file: A2AFileWithUri(uri: url.absoluteString, mimeType: image.mimeType)))
+                } else if let bytes = image.bytes {
+                    parts.append(
+                        A2AFilePart(
+                            file: A2AFileWithBytes(bytes: bytes.base64EncodedString(), mimeType: image.mimeType)
+                        )
+                    )
+                } else if let base64 = image.base64 {
+                    parts.append(A2AFilePart(file: A2AFileWithBytes(bytes: base64, mimeType: image.mimeType)))
+                } else {
+                    genUiLogger.warning("Skipping an image part without data.")
                 }
+            default:
+                genUiLogger.warning("Skipping unsupported message part \(type(of: part)).")
             }
-            return
         }
-        genUiLogger.warning("A2A data part did not contain any known A2UI messages.")
+        return parts
     }
 
-    private func prettyJson(_ json: JsonMap) -> String? {
-        guard let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted]),
-              let text = String(data: data, encoding: .utf8) else {
+    // MARK: - Incoming messages
+
+    private func handle(event: A2ASendStreamMessageResponse) -> String? {
+        genUiLogger.finest("Received A2A event: \(Json.encodeToString(event.toJson(), pretty: true) ?? "")")
+
+        if let errorResponse = event as? A2AJSONRPCErrorResponseSSM {
+            let message = errorResponse.error?.message ?? "unknown error"
+            let code = errorResponse.error?.rpcErrorCode ?? 0
+            genUiLogger.severe("A2A error \(code): \(message)")
+            errorSubject.send(A2AClientError.serverError(code: code, message: message))
             return nil
+        }
+
+        guard let response = event as? A2ASendStreamMessageSuccessResponse else { return nil }
+
+        if let task = response.result as? A2ATask {
+            taskId = task.id
+            contextId = task.contextId ?? contextId
+        }
+        if let update = response.result as? A2ATaskStatusUpdateEvent {
+            taskId = update.taskId ?? taskId
+            contextId = update.contextId ?? contextId
+        }
+
+        let message: A2AMessage?
+        switch response.result {
+        case let task as A2ATask:
+            message = task.status?.message
+        case let direct as A2AMessage:
+            message = direct
+        case let update as A2ATaskStatusUpdateEvent:
+            message = update.status?.message
+        default:
+            message = nil
+        }
+
+        guard let message else { return nil }
+        contextId = message.contextId ?? contextId
+
+        var text: String?
+        for part in message.parts {
+            switch part {
+            case let dataPart as A2ADataPart where isA2uiPart(dataPart):
+                process(dataPart)
+            case let textPart as A2ATextPart:
+                text = [text, textPart.text].compactMap { $0 }.joined(separator: "\n")
+            default:
+                break
+            }
         }
         return text
     }
 
-    private func shouldProcessA2uiPart(_ part: A2ADataPart) -> Bool {
-        guard let metadata = part.metadata else { return true }
-        if let mimeType = metadata["mimeType"] as? String {
-            return a2uiMimeTypes.contains(mimeType)
+    private func isA2uiPart(_ part: A2ADataPart) -> Bool {
+        if let mimeType = part.metadata?["mimeType"] as? String {
+            return mimeType == A2uiProtocol.mimeType || Self.legacyMimeTypes.contains(mimeType)
         }
-        if let mimeType = metadata["mime-type"] as? String {
-            return a2uiMimeTypes.contains(mimeType)
+        // Older agents omit the MIME type; fall back to payload inspection.
+        if let array = part.dataArray {
+            return array.contains { Json.map($0).map(A2uiMessageDecoder.isMessage) ?? false }
         }
-        return true
+        if let map = part.dataMap {
+            return A2uiMessageDecoder.isMessage(map) || map["messages"] != nil
+        }
+        return false
     }
 
-    private func parseJsonMap(_ text: String) -> JsonMap? {
-        guard let data = text.data(using: .utf8) else { return nil }
-        guard let json = try? JSONSerialization.jsonObject(with: data) else { return nil }
-        return json as? JsonMap
+    private func process(_ part: A2ADataPart) {
+        if let array = part.dataArray {
+            emit(array)
+            return
+        }
+        guard let map = part.dataMap else { return }
+        if let wrapped = Json.array(map["messages"]) {
+            emit(wrapped)
+            return
+        }
+        emit([map])
     }
+
+    private func emit(_ values: JsonArray) {
+        let result = A2uiMessageDecoder.decodeList(values)
+        for message in result.messages {
+            messagesSubject.send(message)
+        }
+        for error in result.errors {
+            genUiLogger.severe("Could not decode an A2UI message: \(error)")
+            errorSubject.send(error)
+        }
+    }
+
+    private static let legacyMimeTypes: Set<String> = [
+        "application/json+a2ui",
+        "application/json+a2aui"
+    ]
 }
