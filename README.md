@@ -140,6 +140,7 @@ Agent ──A2A/JSON-RPC──▶ A2uiAgentConnector ──▶ A2uiContentGenera
 | `A2uiAgentConnector`, `A2uiContentGenerator` | The A2A binding: extension activation, metadata, and `application/a2ui+json` data parts. |
 | `GenUiConversation` | Wires an agent to a renderer and keeps the conversation history. |
 | `A2uiPromptBuilder` | Builds the system prompt and catalog documents for LLM-driven agents. |
+| `A2uiInstructions`, `A2uiProgram`, `A2uiStream`, `PortableComponent` | For agents that write A2UI into a chat reply: their instructions, a check that the A2UI they are shown renders, the complete messages of a reply still being written, and components described once for every platform. |
 
 ## The basic catalog
 
@@ -225,6 +226,29 @@ embed in a prompt with `A2uiPromptBuilder`.
 
 `DebugCatalogView(catalog:)` renders every component's examples, which is handy
 while building your own catalog.
+
+### A2UI in chat replies
+
+An agent can write a reply's UI as A2UI messages, one JSON object per line, in a
+fenced block of its text. `A2uiStream.messages(in:)` reads the complete messages
+of such a block while the reply is still being written, so its surfaces show as
+they arrive.
+
+`a2ui-prompt` writes what that agent's model is told: how a reply carries its UI,
+the protocol, the basic catalog with an app's own components, and the app's
+rules and examples.
+
+```bash
+swift run a2ui-prompt path/to/prompt.json > instructions.md
+```
+
+The prompt config is documented at the top of `A2uiPrompt/main.swift`. Its
+`keep` list picks the basic catalog's components and functions the agent may
+use, and its `components` are the app's own, described once for every platform
+(`PortableComponent`): a snake_case `name`, a `description`, `parameters` as a
+JSON Schema object and the `events` the component reports. Every block of its
+examples must render with the catalog (`A2uiProgram.problems(in:catalog:)`), or
+nothing is written: a broken example teaches the model to write broken UI.
 
 ## The sample backend
 

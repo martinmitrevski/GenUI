@@ -22,6 +22,10 @@ let package = Package(
         .executable(
             name: "a2ui-sample-server",
             targets: ["A2uiSampleServer"]
+        ),
+        .executable(
+            name: "a2ui-prompt",
+            targets: ["A2uiPrompt"]
         )
     ],
     targets: [
@@ -49,6 +53,11 @@ let package = Package(
             name: "A2uiSampleAgentTests",
             dependencies: ["A2uiSampleAgent"],
             path: "SampleBackend/Tests/A2uiSampleAgentTests"
+        ),
+        .executableTarget(
+            name: "A2uiPrompt",
+            dependencies: ["GenUI"],
+            path: "A2uiPrompt"
         )
     ]
 )
